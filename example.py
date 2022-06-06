@@ -18,6 +18,11 @@
 from systemd_ctypes import Bus, Event, introspection
 
 
+def property_changed(message):
+    print('Property changed:', message.get_body())
+    return 0
+
+
 async def main():
     system = Bus.default_system()
     system.attach_event(None, 0)
@@ -39,6 +44,8 @@ async def main():
     result = await system.call_async(message, 1000000)
     print(result.get_body())
 
+    return system.add_match("interface='org.freedesktop.DBus.Properties'", property_changed)
 
 loop = Event.create_event_loop()
-loop.run_until_complete(main())
+SLOT = loop.run_until_complete(main())
+loop.run_forever()

@@ -136,3 +136,8 @@ class Bus(sd.bus):
         pending = PendingCall()
         super().call_async(pending, message, pending.callback, pending.userdata, timeout)
         return await pending.future
+
+    def add_match(self, rule, handler):
+        slot = Slot(handler)
+        super().add_match(byref(slot), rule, slot.callback, slot.userdata)
+        return slot

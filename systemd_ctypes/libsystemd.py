@@ -90,6 +90,8 @@ sd.bus_message.register_methods([
 sd.bus.register_methods([
     (staticmethod, negative_errno, 'default_system', [POINTER(sd.bus_p)]),
     (staticmethod, negative_errno, 'default_user', [POINTER(sd.bus_p)]),
+    (instancemethod, negative_errno, 'add_match', [POINTER(sd.bus_slot), utf8, sd.bus_message_handler_t, c_void_p]),
+    (instancemethod, negative_errno, 'add_match_async', [POINTER(sd.bus_slot), utf8, sd.bus_message_handler_t, sd.bus_message_handler_t, c_void_p]),
     (instancemethod, negative_errno, 'attach_event', [sd.event_p, c_int]),
     (instancemethod, negative_errno, 'call', [sd.bus_message_p, c_uint64, POINTER(sd.bus_error), POINTER(sd.bus_message_p)]),
     (instancemethod, negative_errno, 'call_async', [POINTER(sd.bus_slot), sd.bus_message_p, sd.bus_message_handler_t, c_void_p, c_uint64]),
