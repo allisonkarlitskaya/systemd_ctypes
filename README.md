@@ -10,3 +10,7 @@ This projet aims to build a small wrapper around `libsystemd` based on `ctypes`,
 The initial focus is on the [`sd_event`](https://www.freedesktop.org/software/systemd/man/sd-event.html) and [`sd_bus`](https://www.freedesktop.org/software/systemd/man/sd-bus.html) APIs.
 
 This project originated as a weekend hack to support the efforts to write a portable Python version of [`cockpit-bridge`](https://cockpit-project.org/guide/latest/cockpit-bridge.1.html).
+
+Run tests with:
+
+    PYTHONPATH=. python3 test/test_*.py
