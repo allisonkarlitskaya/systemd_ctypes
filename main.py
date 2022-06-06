@@ -21,7 +21,7 @@ import introspection
 
 async def main():
     system = bus.Bus.default_system()
-    system.attach_event()
+    system.attach_event(None, 0)
 
     message = system.message_new_method_call('org.freedesktop.hostname1',
                                              '/org/freedesktop/hostname1',

@@ -13,11 +13,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from libsystemd import *
-from event import Event
-import signature
 import asyncio
+import itertools
 
+from ctypes import c_char, c_uint8, c_uint, c_int16, c_uint16, c_int32, c_uint32, c_int64, c_uint64, c_double, byref
+from librarywrapper import utf8
+from libsystemd import sd
+import signature
 
 BASIC_TYPE_MAP = {
     'y': c_uint8, 'b': c_uint,
@@ -25,21 +27,22 @@ BASIC_TYPE_MAP = {
     'd': c_double, 's': utf8, 'o': utf8, 'g': utf8,
 }
 
-class Message(sd_bus_message_ref):
+
+class Message(sd.bus_message):
     def append_with_info(self, typeinfo, value):
         category, contents, child_info = typeinfo
 
         if basic_type := BASIC_TYPE_MAP.get(category):
-            sd.bus_message_append_basic(self, ord(category), basic_type.from_param(value))
+            self.append_basic(ord(category), basic_type.from_param(value))
         else:
             # Containers
             child_info_iter = itertools.repeat(child_info) if category == 'a' else child_info
             value_iter = value.items() if child_info[0] == 'e' else value
 
-            sd.bus_open_container(category, contents)
-            for child_info, child in zip(child_info, value):
+            self.open_container(category, contents)
+            for child_info, child in zip(child_info_iter, value_iter):
                 self.append_with_info(child_info, child)
-            sd.bus_close_container()
+            self.close_container()
 
     def append(self, typestring, value):
         self.append_with_info(signature.parse_typestring(typestring), value)
@@ -47,7 +50,7 @@ class Message(sd_bus_message_ref):
     def peek_type(self):
         type_holder = c_char()
         contents_holder = utf8()
-        if sd.bus_message_peek_type(self, byref(type_holder), byref(contents_holder)) == 0:
+        if super().peek_type(byref(type_holder), byref(contents_holder)) == 0:
             return None
         return chr(ord(type_holder.value)), contents_holder.value
 
@@ -57,7 +60,7 @@ class Message(sd_bus_message_ref):
 
             if basic_type := BASIC_TYPE_MAP.get(category):
                 holder = basic_type()
-                sd.bus_message_read_basic(self, ord(category), byref(holder))
+                self.read_basic(ord(category), byref(holder))
                 yield holder.value
 
             else:
@@ -69,9 +72,9 @@ class Message(sd_bus_message_ref):
                 else:
                     constructor = tuple
 
-                sd.bus_message_enter_container(self, ord(category), contents)
+                self.enter_container(ord(category), contents)
                 value = constructor(self.yield_values())
-                sd.bus_message_exit_container(self)
+                self.exit_container()
 
                 yield value
 
@@ -81,7 +84,7 @@ class Message(sd_bus_message_ref):
 
 class PendingCall:
     def __init__(self):
-        self.callback = sd_bus_message_handler_t(self.done)
+        self.callback = sd.bus_message_handler_t(self.done)
         self.future = asyncio.get_running_loop().create_future()
 
     def done(self, _message, userdata, error):
@@ -93,37 +96,32 @@ class PendingCall:
             self.future.set_exception(Exception)
         return 0
 
-class Bus(sd_bus_ref):
+
+class Bus(sd.bus):
     @staticmethod
     def default_user():
         bus = Bus()
-        sd.bus_default_user(bus)
+        sd.bus.default_user(bus)
         return bus
 
     @staticmethod
     def default_system():
         bus = Bus()
-        sd.bus_default_system(bus)
+        sd.bus.default_system(bus)
         return bus
-
-    def flush(self):
-        sd.bus_flush(self)
 
     def message_new_method_call(self, destination, path, interface, member):
         message = Message()
-        sd.bus_message_new_method_call(self, message, destination, path, interface, member)
+        super().message_new_method_call(message, destination, path, interface, member)
         return message
 
     def call(self, message, timeout):
         reply = Message()
-        error = sd_bus_error()
-        sd.bus_call(self, message, timeout, error, reply)
+        error = sd.bus_error()
+        super().call(message, timeout, error, reply)
         return reply
 
     async def call_async(self, message, timeout):
         pending = PendingCall()
-        sd.bus_call_async(self, None, message, pending.callback, None, timeout)
+        super().call_async(None, message, pending.callback, None, timeout)
         return await pending.future
-
-    def attach_event(self, event=None, priority=0):
-        sd.bus_attach_event(self, event, priority)

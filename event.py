@@ -17,35 +17,15 @@ import asyncio
 import selectors
 import signal
 
-from libsystemd import sd, sd_event_p
+from libsystemd import sd
 
 
-class Event(sd_event_p):
+class Event(sd.event):
     @staticmethod
     def default():
         event = Event()
-        sd.event_default(event)
+        sd.event.default(event)
         return event
-
-    def get_fd(self):
-        return sd.event_get_fd(self)
-
-    def prepare(self):
-        sd.event_prepare(self)
-
-    def check(self):
-        return sd.event_wait(self, 0)
-
-    def dispatch(self):
-        sd.event_dispatch(self)
-
-    def run(self, usec=0):
-        print(' ', sd.event_run(self, usec))
-
-    def loop(self):
-        # KeyboardInterrupt doesn't get delivered into C code...
-        signal.signal(signal.SIGINT, signal.SIG_DFL)
-        sd.event_loop(self)
 
     def get_loop(self):
         return asyncio.SelectorEventLoop(Selector(self))
@@ -64,7 +44,7 @@ class Selector(selectors.DefaultSelector):
     def select(self, timeout=None):
         self.sd_event.prepare()
         ready = super().select(timeout)
-        if self.sd_event.check():
+        if self.sd_event.wait(0):
             self.sd_event.dispatch()
         # NB: this could return zero events with infinite timeout, but nobody seems to mind.
         return [(key, events) for (key, events) in ready if key != self.key]
