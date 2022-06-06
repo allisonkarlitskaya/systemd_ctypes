@@ -79,19 +79,30 @@ class BusError(Exception):
         self.message = message
 
 
-class PendingCall:
+class Slot(sd.bus_slot):
+    def __init__(self, callback=None):
+        self.__func__ = callback
+        self.callback = sd.bus_message_handler_t(self._callback)
+        self.userdata = None
+
+    def _callback(self, _message, _userdata, _ret_error):
+        # If this throws an exception, ctypes will log the message and return
+        # -1 which is actually more or less exactly what we want.
+        return 1 if self.__func__(BusMessage.ref(_message)) else 0
+
+
+class PendingCall(Slot):
     def __init__(self):
-        self.callback = sd.bus_message_handler_t(self.done)
+        super().__init__(self.done)
         self.future = asyncio.get_running_loop().create_future()
 
-    def done(self, _message, _userdata, _ret_error):
-        message = BusMessage.ref(_message)
+    def done(self, message):
         if message.is_method_error(None):
             error = message.get_error()[0]
             self.future.set_exception(BusError(error.name.value, error.message.value, message))
         else:
             self.future.set_result(message)
-        return 0
+        return True
 
 
 class Bus(sd.bus):
@@ -123,5 +134,5 @@ class Bus(sd.bus):
 
     async def call_async(self, message, timeout):
         pending = PendingCall()
-        super().call_async(None, message, pending.callback, None, timeout)
+        super().call_async(pending, message, pending.callback, pending.userdata, timeout)
         return await pending.future
