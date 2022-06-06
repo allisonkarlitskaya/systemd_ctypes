@@ -51,30 +51,6 @@ class instancemethod:
         return types.MethodType(self.__func__, obj)
 
 
-class typewrapper(c_void_p):
-    @classmethod
-    def register_methods(cls, methods, private=False):
-        prefix = '_' if private else ''
-        for decorator, restype, name, argtypes in methods:
-            func = getattr(cls._library, f'{cls.namespace}_{name}')
-            func.restype = restype
-            if hasattr(restype, 'errcheck'):
-                func.errcheck = func.restype.errcheck
-            if decorator is instancemethod:
-                func.argtypes = [cls, *argtypes]
-            else:
-                func.argtypes = argtypes
-            setattr(cls, f'{prefix}{name}', decorator(func))
-
-    @classmethod
-    def ref(cls, obj):
-        assert cls._owns_reference
-        return cls(obj._ref().value)
-
-    def __del__(self):
-        if self._owns_reference and self.value is not None:
-            self._unref()
-
 class librarywrapper:
     @classmethod
     def dlopen(cls, soname):
@@ -82,18 +58,43 @@ class librarywrapper:
 
     @classmethod
     def register_reference_types(cls, type_names):
-        overrides = {key: cls.__dict__[key] for key in ['__module__', '_library']}
         for name in type_names:
-            # the {name}_p types are (weak) pointers
-            # the {name} types own their value
-            weak_ref = type(f'{name}_p', (typewrapper,), overrides)
-            weak_ref.namespace = f'{cls.namespace}_{name}'
-            weak_ref._owns_reference = False
-            weak_ref.register_methods([
-                (instancemethod, weak_ref, 'ref', []),
-                (instancemethod, None, 'unref', [])
-            ], private=True)
-            ref = type(name, (weak_ref,), overrides)
-            ref._owns_reference = True
-            setattr(cls, f'{name}_p', weak_ref)
-            setattr(cls, f'{name}', ref)
+            class pointer_type(c_void_p):
+                __qualname__ = f'{cls.__qualname__}.{name}_p'
+                __module__ = cls.__module__
+                _library = cls._library
+                namespace = f'{cls.namespace}_{name}'
+
+                @classmethod
+                def register_methods(cls, methods, private=False):
+                    prefix = '_' if private else ''
+                    for decorator, restype, name, argtypes in methods:
+                        func = getattr(cls._library, f'{cls.namespace}_{name}')
+                        func.restype = restype
+                        if hasattr(restype, 'errcheck'):
+                            func.errcheck = func.restype.errcheck
+                        if decorator is instancemethod:
+                            func.argtypes = [cls, *argtypes]
+                        else:
+                            func.argtypes = argtypes
+                        setattr(cls, f'{prefix}{name}', decorator(func))
+
+            pointer_type.register_methods([(instancemethod, pointer_type, 'ref', [])], private=True)
+            pointer_type.__name__ = f'{name}_p'
+            setattr(cls, pointer_type.__name__, pointer_type)
+
+            class reference_type(pointer_type):
+                __qualname__ = f'{cls.__qualname__}.{name}'
+                __module__ = cls.__module__
+
+                @classmethod
+                def ref(cls, obj):
+                    return cls(obj._ref().value)
+
+                def __del__(self):
+                    if self.value is not None:
+                        self._unref()
+
+            reference_type.register_methods([(instancemethod, None, 'unref', [])], private=True)
+            reference_type.__name__ = name
+            setattr(cls, reference_type.__name__, reference_type)
