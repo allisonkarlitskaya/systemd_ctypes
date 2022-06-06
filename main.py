@@ -13,8 +13,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import asyncio
-
 import bus
 import event
 import introspection
@@ -40,6 +38,5 @@ async def main():
     result = await system.call_async(message, 1000000)
     print(result.get_body())
 
-loop = event.Event.default().get_loop()
-asyncio.set_event_loop(loop)
+loop = event.Event.create_event_loop()
 loop.run_until_complete(main())
