@@ -26,10 +26,10 @@ class sd(librarywrapper):
     class bus_error(Structure):
         # This is ABI, so we are safe to assume it doesn't change
         # unfortunately, we lack anything like sd_bus_error_new()
-        __fields__ = [
-            ("name", str),
-            ("message", str),
-            ("_need_free", int)
+        _fields_ = [
+            ("name", utf8),
+            ("message", utf8),
+            ("_need_free", c_int)
         ]
 
     class bus_slot_p(c_void_p):
