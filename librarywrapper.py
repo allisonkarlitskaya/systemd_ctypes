@@ -28,16 +28,21 @@ class negative_errno(c_int):
 
 
 class utf8(c_char_p):
+    def __init__(self, value=None):
+        if value is not None:
+            value = value.encode('utf-8')
+        super().__init__(value)
+
     @classmethod
     def from_param(cls, value):
-        return cls(value.encode('utf-8'))
+        return cls(value)
+
     @property
     def value(self):
-        data = super().value
-        return None if data is None else data.decode('utf-8')
-    #@staticmethod
-    #def errcheck(self, func, args):
-    #    return self.value
+        value = super().value
+        if value is not None:
+            value = value.decode('utf-8')
+        return value
 
 
 class instancemethod:
