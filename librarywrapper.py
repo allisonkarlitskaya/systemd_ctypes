@@ -52,6 +52,10 @@ class instancemethod:
 
 
 class librarywrapper:
+    def __getattr__(self, name):
+        # This is mostly to silence pylint complaining about unknown attributes
+        raise AttributeError(f'{self.namespace}_{name} is not registered')
+
     @classmethod
     def dlopen(cls, soname):
         cls._library = cdll.LoadLibrary(soname)
