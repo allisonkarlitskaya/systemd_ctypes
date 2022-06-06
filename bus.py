@@ -88,7 +88,7 @@ class PendingCall:
         self.future = asyncio.get_running_loop().create_future()
 
     def done(self, _message, userdata, error):
-        message = Message(_message)
+        message = Message.ref(_message)
 
         if message:
             self.future.set_result(message)

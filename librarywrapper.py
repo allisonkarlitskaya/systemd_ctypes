@@ -66,13 +66,10 @@ class typewrapper(c_void_p):
                 func.argtypes = argtypes
             setattr(cls, f'{prefix}{name}', decorator(func))
 
-    def __init__(self, copy=None):
-        super().__init__()
-        if copy:
-            if self._owns_reference:
-                self.value = copy._ref().value
-            else:
-                self.value = copy.value
+    @classmethod
+    def ref(cls, obj):
+        assert cls._owns_reference
+        return cls(obj._ref().value)
 
     def __del__(self):
         if self._owns_reference and self.value is not None:
