@@ -71,18 +71,26 @@ class BusMessage(sd.bus_message):
         return list(self.yield_values())
 
 
+class BusError(Exception):
+    def __init__(self, code, description, message=None):
+        super().__init__(description)
+        self.code = code
+        self.description = description
+        self.message = message
+
+
 class PendingCall:
     def __init__(self):
         self.callback = sd.bus_message_handler_t(self.done)
         self.future = asyncio.get_running_loop().create_future()
 
-    def done(self, _message, _userdata, _error):
+    def done(self, _message, _userdata, _ret_error):
         message = BusMessage.ref(_message)
-
-        if message:
-            self.future.set_result(message)
+        if message.is_method_error(None):
+            error = message.get_error()[0]
+            self.future.set_exception(BusError(error.name.value, error.message.value, message))
         else:
-            self.future.set_exception(Exception)
+            self.future.set_result(message)
         return 0
 
 
@@ -107,8 +115,11 @@ class Bus(sd.bus):
     def call(self, message, timeout):
         reply = BusMessage()
         error = sd.bus_error()
-        super().call(message, timeout, error, reply)
-        return reply
+        try:
+            super().call(message, timeout, byref(error), reply)
+            return reply
+        except OSError as exc:
+            raise BusError(error.name.value, error.message.value, reply)
 
     async def call_async(self, message, timeout):
         pending = PendingCall()
