@@ -16,25 +16,19 @@
 import asyncio
 import itertools
 
-from ctypes import c_char, c_uint8, c_uint, c_int16, c_uint16, c_int32, c_uint32, c_int64, c_uint64, c_double, byref
-from librarywrapper import utf8
+from librarywrapper import utf8, c_char, byref
 from libsystemd import sd
 import signature
-
-BASIC_TYPE_MAP = {
-    'y': c_uint8, 'b': c_uint,
-    'n': c_int16, 'q': c_uint16, 'i': c_int32, 'u': c_uint32, 'x': c_int64, 't': c_uint64,
-    'd': c_double, 's': utf8, 'o': utf8, 'g': utf8,
-}
 
 
 class Message(sd.bus_message):
     def append_with_info(self, typeinfo, value):
         category, contents, child_info = typeinfo
 
-        if basic_type := BASIC_TYPE_MAP.get(category):
-            self.append_basic(ord(category), basic_type.from_param(value))
-        else:
+        try:
+            # Basic types
+            self.append_basic(category, value)
+        except KeyError:
             # Containers
             child_info_iter = itertools.repeat(child_info) if category == 'a' else child_info
             value_iter = value.items() if child_info[0] == 'e' else value
@@ -58,12 +52,10 @@ class Message(sd.bus_message):
         while next_type := self.peek_type():
             category, contents = next_type
 
-            if basic_type := BASIC_TYPE_MAP.get(category):
-                holder = basic_type()
-                self.read_basic(ord(category), byref(holder))
-                yield holder.value
-
-            else:
+            try:
+                # Basic types
+                yield self.read_basic(category)
+            except KeyError:
                 # Containers
                 if category == 'a':
                     constructor = dict if contents.startswith('{') else list
@@ -75,7 +67,6 @@ class Message(sd.bus_message):
                 self.enter_container(ord(category), contents)
                 value = constructor(self.yield_values())
                 self.exit_container()
-
                 yield value
 
     def read_body(self):
