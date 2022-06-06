@@ -77,6 +77,7 @@ sd.bus_message.register_methods([
     (instancemethod, negative_errno, 'exit_container', []),
     (instancemethod, negative_errno, 'open_container', [c_char, utf8]),
     (instancemethod, negative_errno, 'peek_type', [POINTER(c_char), POINTER(utf8)]),
+    (instancemethod, negative_errno, 'rewind', [c_int]),
     (basic_type_in, negative_errno, 'append_basic', [sd.bus_message_p, c_char, c_void_p]),
     (basic_type_out, negative_errno, 'read_basic', [sd.bus_message_p, c_char, c_void_p]),
     (instancemethod, utf8, 'get_signature', [c_int]),

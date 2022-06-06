@@ -69,7 +69,8 @@ class Message(sd.bus_message):
                 self.exit_container()
                 yield value
 
-    def read_body(self):
+    def get_body(self):
+        self.rewind(True)
         return list(self.yield_values())
 
 

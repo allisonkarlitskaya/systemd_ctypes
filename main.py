@@ -28,7 +28,7 @@ async def main():
                                              'org.freedesktop.DBus.Introspectable',
                                              'Introspect')
     reply = system.call(message, -1)
-    xml, = reply.read_body()
+    xml, = reply.get_body()
     print(introspection.parse_xml(xml))
 
 
@@ -38,7 +38,7 @@ async def main():
                                              'GetAll')
     message.append('s', 'org.freedesktop.hostname1')
     result = await system.call_async(message, 1000000)
-    print(result.read_body())
+    print(result.get_body())
 
 loop = event.Event.default().get_loop()
 asyncio.set_event_loop(loop)
