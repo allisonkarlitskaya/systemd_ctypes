@@ -20,11 +20,10 @@ import os
 
 
 class negative_errno(c_int):
-    @staticmethod
-    def errcheck(self, func, args):
+    def errcheck(self, func, _args):
         result = self.value
         if result < 0:
-            raise OSError(-result, os.strerror(-result))
+            raise OSError(-result, f'{func}: {os.strerror(-result)}')
         return result
 
 
