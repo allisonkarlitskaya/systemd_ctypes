@@ -24,7 +24,7 @@ from .libsystemd import sd
 from .signature import parse_typestring
 
 
-class Message(sd.bus_message):
+class BusMessage(sd.bus_message):
     def append_with_info(self, typeinfo, value):
         category, contents, child_info = typeinfo
 
@@ -77,7 +77,7 @@ class PendingCall:
         self.future = asyncio.get_running_loop().create_future()
 
     def done(self, _message, _userdata, _error):
-        message = Message.ref(_message)
+        message = BusMessage.ref(_message)
 
         if message:
             self.future.set_result(message)
@@ -100,12 +100,12 @@ class Bus(sd.bus):
         return bus
 
     def message_new_method_call(self, destination, path, interface, member):
-        message = Message()
+        message = BusMessage()
         super().message_new_method_call(message, destination, path, interface, member)
         return message
 
     def call(self, message, timeout):
-        reply = Message()
+        reply = BusMessage()
         error = sd.bus_error()
         super().call(message, timeout, error, reply)
         return reply
