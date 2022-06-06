@@ -41,16 +41,10 @@ class Message(sd.bus_message):
     def append(self, typestring, value):
         self.append_with_info(signature.parse_typestring(typestring), value)
 
-    def peek_type(self):
-        type_holder = c_char()
-        contents_holder = utf8()
-        if super().peek_type(byref(type_holder), byref(contents_holder)) == 0:
-            return None
-        return chr(ord(type_holder.value)), contents_holder.value
-
     def yield_values(self):
-        while next_type := self.peek_type():
-            category, contents = next_type
+        category_holder, contents_holder = c_char(), utf8()
+        while self.peek_type(byref(category_holder), byref(contents_holder)):
+            category, contents = chr(ord(category_holder.value)), contents_holder.value
 
             try:
                 # Basic types
