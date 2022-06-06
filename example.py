@@ -1,4 +1,6 @@
-# Copyright (C) 2022  Allison Karlitskaya
+# systemd_ctypes
+#
+# Copyright (C) 2022 Allison Karlitskaya <allison.karlitskaya@redhat.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,6 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from systemd_ctypes import Bus, Event, introspection
+
 
 async def main():
     system = Bus.default_system()
@@ -35,6 +38,7 @@ async def main():
     message.append('s', 'org.freedesktop.hostname1')
     result = await system.call_async(message, 1000000)
     print(result.get_body())
+
 
 loop = Event.create_event_loop()
 loop.run_until_complete(main())
