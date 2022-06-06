@@ -45,14 +45,11 @@ class utf8(c_char_p):
         return value
 
 
-class instancemethod:
-    def __init__(self, function):
-        self.__func__ = function
-
-    def __get__(self, obj, objtype=None):
-        if not obj:
-            return self
-        return types.MethodType(self.__func__, obj)
+def instancemethod(func):
+    func.argtypes = [c_void_p, *func.argtypes]
+    def wrapper(*args):
+        return func(*args)
+    return wrapper
 
 
 class librarywrapper:
@@ -78,13 +75,9 @@ class librarywrapper:
                     prefix = '_' if private else ''
                     for decorator, restype, name, argtypes in methods:
                         func = getattr(cls._library, f'{cls.namespace}_{name}')
-                        func.restype = restype
+                        func.restype, func.argtypes = restype, argtypes
                         if hasattr(restype, 'errcheck'):
                             func.errcheck = func.restype.errcheck
-                        if decorator is instancemethod:
-                            func.argtypes = [cls, *argtypes]
-                        else:
-                            func.argtypes = argtypes
                         setattr(cls, f'{prefix}{name}', decorator(func))
 
             pointer_type.register_methods([(instancemethod, pointer_type, 'ref', [])], private=True)
