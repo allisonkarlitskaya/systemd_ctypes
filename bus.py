@@ -78,7 +78,7 @@ class PendingCall:
         self.callback = sd.bus_message_handler_t(self.done)
         self.future = asyncio.get_running_loop().create_future()
 
-    def done(self, _message, userdata, error):
+    def done(self, _message, _userdata, _error):
         message = Message.ref(_message)
 
         if message:

@@ -15,9 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import json
 import xml.etree.ElementTree as ET
-
 
 def parse_method(method):
     return {
@@ -26,10 +24,10 @@ def parse_method(method):
     }
 
 
-def parse_property(property):
+def parse_property(prop):
     return {
-        "flags": 'w' if property.attrib.get('access') == 'write' else 'r',
-        "type": property.attrib['type']
+        "flags": 'w' if prop.attrib.get('access') == 'write' else 'r',
+        "type": prop.attrib['type']
     }
 
 
