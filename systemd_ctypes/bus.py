@@ -1,4 +1,6 @@
-# Copyright (C) 2022  Allison Karlitskaya
+# systemd_ctypes
+#
+# Copyright (C) 2022 Allison Karlitskaya <allison.karlitskaya@redhat.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,10 +17,11 @@
 
 import asyncio
 import itertools
+from ctypes import c_char, byref
 
-from librarywrapper import utf8, c_char, byref
-from libsystemd import sd
-import signature
+from .librarywrapper import utf8
+from .libsystemd import sd
+from .signature import parse_typestring
 
 
 class Message(sd.bus_message):
@@ -39,7 +42,7 @@ class Message(sd.bus_message):
             self.close_container()
 
     def append(self, typestring, value):
-        self.append_with_info(signature.parse_typestring(typestring), value)
+        self.append_with_info(parse_typestring(typestring), value)
 
     def yield_values(self):
         category_holder, contents_holder = c_char(), utf8()

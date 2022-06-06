@@ -1,5 +1,6 @@
+# systemd_ctypes
 #
-# Copyright (C) 2022  Allison Karlitskaya
+# Copyright (C) 2022 Allison Karlitskaya <allison.karlitskaya@redhat.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,20 +15,19 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from ctypes import *
-import types
+import ctypes
 import os
 
 
-class negative_errno(c_int):
+class negative_errno(ctypes.c_int):
     def errcheck(self, func, _args):
         result = self.value
         if result < 0:
-            raise OSError(-result, f'{func}: {os.strerror(-result)}')
+            raise OSError(-result, f'{func.__name__}: {os.strerror(-result)}')
         return result
 
 
-class utf8(c_char_p):
+class utf8(ctypes.c_char_p):
     def __init__(self, value=None):
         if value is not None:
             value = value.encode('utf-8')
@@ -46,7 +46,7 @@ class utf8(c_char_p):
 
 
 def instancemethod(func):
-    func.argtypes = [c_void_p, *func.argtypes]
+    func.argtypes = [ctypes.c_void_p, *func.argtypes]
     def wrapper(*args):
         return func(*args)
     return wrapper
@@ -59,12 +59,12 @@ class librarywrapper:
 
     @classmethod
     def dlopen(cls, soname):
-        cls._library = cdll.LoadLibrary(soname)
+        cls._library = ctypes.cdll.LoadLibrary(soname)
 
     @classmethod
     def register_reference_types(cls, type_names):
         for name in type_names:
-            class pointer_type(c_void_p):
+            class pointer_type(ctypes.c_void_p):
                 __qualname__ = f'{cls.__qualname__}.{name}_p'
                 __module__ = cls.__module__
                 _library = cls._library

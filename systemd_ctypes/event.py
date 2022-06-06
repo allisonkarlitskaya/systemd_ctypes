@@ -18,7 +18,7 @@
 import asyncio
 import selectors
 
-from libsystemd import sd
+from .libsystemd import sd
 
 
 class Event(sd.event):

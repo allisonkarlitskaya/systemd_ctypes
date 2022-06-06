@@ -13,12 +13,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import bus
-import event
-import introspection
+from systemd_ctypes import Bus, Event, introspection
 
 async def main():
-    system = bus.Bus.default_system()
+    system = Bus.default_system()
     system.attach_event(None, 0)
 
     message = system.message_new_method_call('org.freedesktop.hostname1',
@@ -38,5 +36,5 @@ async def main():
     result = await system.call_async(message, 1000000)
     print(result.get_body())
 
-loop = event.Event.create_event_loop()
+loop = Event.create_event_loop()
 loop.run_until_complete(main())
