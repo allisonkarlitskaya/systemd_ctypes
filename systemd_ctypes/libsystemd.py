@@ -63,7 +63,8 @@ BASIC_TYPE_MAP = {
 # Raises KeyError in case the type character is not supported.
 def basic_type_in(func):
     def wrapper(self, char, value):
-        func(self, ord(char), BASIC_TYPE_MAP[char](value))
+        box = BASIC_TYPE_MAP[char](value)
+        func(self, ord(char), box if isinstance(box, utf8) else byref(box))
     return wrapper
 def basic_type_out(func):
     def wrapper(self, char):
