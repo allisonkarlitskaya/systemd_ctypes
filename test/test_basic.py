@@ -149,6 +149,12 @@ class TestAPI(dbusmock.DBusTestCase):
         with self.assertRaisesRegex(systemd_ctypes.BusError, "OverflowError: can't convert negative value to unsigned int"):
             self.bus_user.call(message, -1)
 
+    def test_float(self):
+        self.add_method('', 'Sq', 'd', 'd', 'ret = args[0] * args[0]')
+        message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Sq')
+        message.append('d', -5.5)
+        self.assertAlmostEqual(self.async_call(message).get_body()[0], 30.25)
+
     def test_unknown_method_sync(self):
         message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Do')
         with self.assertRaisesRegex(systemd_ctypes.BusError, '.*org.freedesktop.DBus.Error.UnknownMethod:.*'
