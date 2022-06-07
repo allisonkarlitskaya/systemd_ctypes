@@ -155,6 +155,12 @@ class TestAPI(dbusmock.DBusTestCase):
         message.append('d', -5.5)
         self.assertAlmostEqual(self.async_call(message).get_body()[0], 30.25)
 
+    def test_objpath(self):
+        self.add_method('', 'Parent', 'o', 'o', "ret = '/'.join(args[0].split('/')[:-1])")
+        message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Parent')
+        message.append('o', '/foo/bar/baz')
+        self.assertEqual(self.async_call(message).get_body(), ('/foo/bar',))
+
     def test_unknown_method_sync(self):
         message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Do')
         with self.assertRaisesRegex(systemd_ctypes.BusError, '.*org.freedesktop.DBus.Error.UnknownMethod:.*'
