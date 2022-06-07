@@ -108,7 +108,7 @@ class TestAPI(dbusmock.DBusTestCase):
             message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Not')
             message.append('b', val)
             result = self.bus_user.call(message, -1).get_body()
-            self.assertEqual(result, not val)
+            self.assertEqual(result, (not val,))
 
     def test_int_sync(self):
         self.add_method('', 'Inc', 'iuxt', 'iuxt', 'ret = (args[0] + 1, args[1] + 1, args[2] + 1, args[3] + 1)')
@@ -116,8 +116,8 @@ class TestAPI(dbusmock.DBusTestCase):
         message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Inc')
         message.append('i', 0x7FFFFFFE)
         message.append('u', 0xFFFFFFFE)
-        wessage.append('x', 0x7FFFFFFFFFFFFFFE)
-        wessage.append('t', 0xFFFFFFFFFFFFFFFE)
+        message.append('x', 0x7FFFFFFFFFFFFFFE)
+        message.append('t', 0xFFFFFFFFFFFFFFFE)
         result = self.bus_user.call(message, -1).get_body()
         self.assertEqual(result, (0x7FFFFFFF, 0xFFFFFFFF, 0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF))
 
@@ -127,8 +127,8 @@ class TestAPI(dbusmock.DBusTestCase):
         message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Inc')
         message.append('i', 0x7FFFFFFE)
         message.append('u', 0xFFFFFFFE)
-        wessage.append('x', 0x7FFFFFFFFFFFFFFE)
-        wessage.append('t', 0xFFFFFFFFFFFFFFFE)
+        message.append('x', 0x7FFFFFFFFFFFFFFE)
+        message.append('t', 0xFFFFFFFFFFFFFFFE)
         result = self.async_call(message).get_body()
         self.assertEqual(result, (0x7FFFFFFF, 0xFFFFFFFF, 0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF))
 
