@@ -30,5 +30,4 @@ jobs:
           fi
 
       - name: Run tests
-        run: PYTHONPATH=. python3 test/test_*.py
-
+        run: test/run
