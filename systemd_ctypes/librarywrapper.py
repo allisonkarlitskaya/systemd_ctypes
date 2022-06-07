@@ -45,6 +45,13 @@ class utf8(ctypes.c_char_p):
         return value
 
 
+class boolint(ctypes.c_int):
+    @property
+    def value(self):
+        # https://github.com/python/cpython/issues/73456
+        return bool(ctypes.c_int.value.__get__(self))
+
+
 def instancemethod(func):
     func.argtypes = [ctypes.c_void_p, *func.argtypes]
     def wrapper(*args):
