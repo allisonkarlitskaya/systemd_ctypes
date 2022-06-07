@@ -101,6 +101,37 @@ class TestAPI(dbusmock.DBusTestCase):
 
         self.assertLog(b'^[0-9.]+ Reverse "ab c"\n$')
 
+    def test_bool_sync(self):
+        self.add_method('', 'Not', 'b', 'b', 'ret = not args[0]')
+
+        for val in [False, True]:
+            message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Not')
+            message.append('b', val)
+            result = self.bus_user.call(message, -1).get_body()
+            self.assertEqual(result, not val)
+
+    def test_int_sync(self):
+        self.add_method('', 'Inc', 'iuxt', 'iuxt', 'ret = (args[0] + 1, args[1] + 1, args[2] + 1, args[3] + 1)')
+
+        message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Inc')
+        message.append('i', 0x7FFFFFFE)
+        message.append('u', 0xFFFFFFFE)
+        wessage.append('x', 0x7FFFFFFFFFFFFFFE)
+        wessage.append('t', 0xFFFFFFFFFFFFFFFE)
+        result = self.bus_user.call(message, -1).get_body()
+        self.assertEqual(result, (0x7FFFFFFF, 0xFFFFFFFF, 0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF))
+
+    def test_int_async(self):
+        self.add_method('', 'Inc', 'iuxt', 'iuxt', 'ret = (args[0] + 1, args[1] + 1, args[2] + 1, args[3] + 1)')
+
+        message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Inc')
+        message.append('i', 0x7FFFFFFE)
+        message.append('u', 0xFFFFFFFE)
+        wessage.append('x', 0x7FFFFFFFFFFFFFFE)
+        wessage.append('t', 0xFFFFFFFFFFFFFFFE)
+        result = self.async_call(message).get_body()
+        self.assertEqual(result, (0x7FFFFFFF, 0xFFFFFFFF, 0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF))
+
     def test_unknown_method_sync(self):
         message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Do')
         with self.assertRaisesRegex(systemd_ctypes.BusError, '.*org.freedesktop.DBus.Error.UnknownMethod:.*'
