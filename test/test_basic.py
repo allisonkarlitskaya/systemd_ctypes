@@ -123,16 +123,16 @@ class TestAPI(dbusmock.DBusTestCase):
         self.assertEqual(result, (0x7F, 0x7FFFFFFF, 0xFFFFFFFF, 0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF))
 
     def test_int_async(self):
-        self.add_method('', 'Inc', 'yiuxt', 'yiuxt', 'ret = (args[0] + 1, args[1] + 1, args[2] + 1, args[3] + 1, args[4] + 1)')
+        self.add_method('', 'Dec', 'yiuxt', 'yiuxt', 'ret = (args[0] - 1, args[1] - 1, args[2] - 1, args[3] - 1, args[4] - 1)')
 
-        message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Inc')
-        message.append('y', 0x7E)
-        message.append('i', 0x7FFFFFFE)
-        message.append('u', 0xFFFFFFFE)
-        message.append('x', 0x7FFFFFFFFFFFFFFE)
-        message.append('t', 0xFFFFFFFFFFFFFFFE)
+        message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Dec')
+        message.append('y', 1)
+        message.append('i', -0x7FFFFFFF)
+        message.append('u', 1)
+        message.append('x', -0x7FFFFFFFFFFFFFFF)
+        message.append('t', 1)
         result = self.async_call(message).get_body()
-        self.assertEqual(result, (0x7F, 0x7FFFFFFF, 0xFFFFFFFF, 0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF))
+        self.assertEqual(result, (0, -0x80000000, 0, -0x8000000000000000, 0))
 
     def test_unknown_method_sync(self):
         message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Do')
