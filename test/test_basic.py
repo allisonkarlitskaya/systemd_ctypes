@@ -50,7 +50,7 @@ class TestAPI(dbusmock.DBusTestCase):
         message.append('s', out_sig)
         message.append('s', code)
         result = self.bus_user.call(message, -1)
-        self.assertEqual(result.get_body(), [])
+        self.assertEqual(result.get_body(), ())
 
     def async_call(self, message):
         loop = systemd_ctypes.Event.create_event_loop()
@@ -68,7 +68,7 @@ class TestAPI(dbusmock.DBusTestCase):
 
         message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Do')
         result = self.bus_user.call(message, -1).get_body()
-        self.assertEqual(result, [])
+        self.assertEqual(result, ())
 
         self.assertLog(b'^[0-9.]+ Do$')
 
@@ -77,7 +77,7 @@ class TestAPI(dbusmock.DBusTestCase):
 
         message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Do')
         result = self.async_call(message).get_body()
-        self.assertEqual(result, [])
+        self.assertEqual(result, ())
 
         self.assertLog(b'^[0-9.]+ Do$')
 
@@ -87,7 +87,7 @@ class TestAPI(dbusmock.DBusTestCase):
         message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Reverse')
         message.append('s', 'ab c')
         result = self.bus_user.call(message, -1).get_body()
-        self.assertEqual(result, ['c ba'])
+        self.assertEqual(result, ('c ba',))
 
         self.assertLog(b'^[0-9.]+ Reverse "ab c"\n$')
 
@@ -97,7 +97,7 @@ class TestAPI(dbusmock.DBusTestCase):
         message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Reverse')
         message.append('s', 'ab c')
         result = self.async_call(message).get_body()
-        self.assertEqual(result, ['c ba'])
+        self.assertEqual(result, ('c ba',))
 
         self.assertLog(b'^[0-9.]+ Reverse "ab c"\n$')
 

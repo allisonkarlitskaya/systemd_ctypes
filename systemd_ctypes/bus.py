@@ -68,7 +68,7 @@ class BusMessage(sd.bus_message):
 
     def get_body(self):
         self.rewind(True)
-        return list(self.yield_values())
+        return tuple(self.yield_values())
 
 
 class BusError(Exception):
