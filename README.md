@@ -11,6 +11,4 @@ The initial focus is on the [`sd_event`](https://www.freedesktop.org/software/sy
 
 This project originated as a weekend hack to support the efforts to write a portable Python version of [`cockpit-bridge`](https://cockpit-project.org/guide/latest/cockpit-bridge.1.html).
 
-Run tests with:
-
-    PYTHONPATH=. python3 test/test_*.py
+Run tests with `test/run`.

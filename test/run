@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+cd "${0%/*}/.."
+export PYTHONPATH=.
+python3 test/test_*.py
