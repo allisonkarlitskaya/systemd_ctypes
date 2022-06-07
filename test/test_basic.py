@@ -173,6 +173,12 @@ class TestAPI(dbusmock.DBusTestCase):
                 'Do is not a valid method of interface org.freedesktop.Test.Main'):
             self.async_call(message).get_body()
 
+    def test_custom_error(self):
+        self.add_method('', 'Boom', '', '', 'raise dbus.exceptions.DBusException("no good", name="com.example.Error.NoGood")')
+        message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Boom')
+        with self.assertRaisesRegex(systemd_ctypes.BusError, 'no good'):
+            self.bus_user.call(message, -1)
+
 
 if __name__ == '__main__':
     # avoid writing to stderr
