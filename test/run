@@ -1,5 +1,14 @@
-#!/bin/sh
-set -eu
-cd "${0%/*}/.."
-export PYTHONPATH=.
-python3 test/test_*.py
+#!/usr/bin/python3
+
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.realpath(f'{__file__}/../..'))
+
+runner = unittest.TextTestRunner(stream=sys.stdout)
+loader = unittest.TestLoader()
+
+tests = loader.discover('test', 'test_*.py')
+result = runner.run(tests)
+sys.exit(0 if result.wasSuccessful() else 1)
