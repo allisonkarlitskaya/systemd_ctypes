@@ -15,5 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+"""systemd_ctypes"""
+
+__version__ = "0"
+
 from .bus import Bus, BusError, BusMessage
 from .event import Event
