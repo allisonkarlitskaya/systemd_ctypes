@@ -27,20 +27,19 @@ async def main():
     system = Bus.default_system()
     system.attach_event(None, 0)
 
-    reply = system.call_method('org.freedesktop.hostname1',
-                               '/org/freedesktop/hostname1',
-                               'org.freedesktop.DBus.Introspectable',
-                               'Introspect')
-    xml, = reply.get_body()
+    xml, = system.call_method('org.freedesktop.hostname1',
+                              '/org/freedesktop/hostname1',
+                              'org.freedesktop.DBus.Introspectable',
+                              'Introspect')
     print(introspection.parse_xml(xml))
 
 
-    result = await system.call_method_async('org.freedesktop.hostname1',
+    items, = await system.call_method_async('org.freedesktop.hostname1',
                                             '/org/freedesktop/hostname1',
                                             'org.freedesktop.DBus.Properties',
                                             'GetAll',
                                             's', 'org.freedesktop.hostname1')
-    print(result.get_body())
+    print(items)
 
     return system.add_match("interface='org.freedesktop.DBus.Properties'", property_changed)
 

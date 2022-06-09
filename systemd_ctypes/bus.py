@@ -138,7 +138,8 @@ class Bus(sd.bus):
 
     def call_method(self, destination, path, interface, member, types='', *args):
         message = self.message_new_method_call(destination, path, interface, member, types, *args)
-        return self.call(message)
+        message = self.call(message)
+        return message.get_body()
 
     async def call_async(self, message, timeout=0):
         pending = PendingCall()
@@ -147,7 +148,8 @@ class Bus(sd.bus):
 
     async def call_method_async(self, destination, path, interface, member, types='', *args):
         message = self.message_new_method_call(destination, path, interface, member, types, *args)
-        return await self.call_async(message)
+        message = await self.call_async(message)
+        return message.get_body()
 
     def add_match(self, rule, handler):
         slot = Slot(handler)
