@@ -123,7 +123,7 @@ class Bus(sd.bus):
         super().message_new_method_call(message, destination, path, interface, member)
         return message
 
-    def call(self, message, timeout):
+    def call(self, message, timeout=0):
         reply = BusMessage()
         error = sd.bus_error()
         try:
@@ -132,7 +132,7 @@ class Bus(sd.bus):
         except OSError as exc:
             raise BusError(error.name.value, error.message.value, reply) from exc
 
-    async def call_async(self, message, timeout):
+    async def call_async(self, message, timeout=0):
         pending = PendingCall()
         super().call_async(pending, message, pending.callback, pending.userdata, timeout)
         return await pending.future
