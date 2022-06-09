@@ -136,10 +136,18 @@ class Bus(sd.bus):
         except OSError as exc:
             raise BusError(error.name.value, error.message.value, reply) from exc
 
+    def call_method(self, destination, path, interface, member, types='', *args):
+        message = self.message_new_method_call(destination, path, interface, member, types, *args)
+        return self.call(message)
+
     async def call_async(self, message, timeout=0):
         pending = PendingCall()
         super().call_async(pending, message, pending.callback, pending.userdata, timeout)
         return await pending.future
+
+    async def call_method_async(self, destination, path, interface, member, types='', *args):
+        message = self.message_new_method_call(destination, path, interface, member, types, *args)
+        return await self.call_async(message)
 
     def add_match(self, rule, handler):
         slot = Slot(handler)
