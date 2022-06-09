@@ -121,9 +121,10 @@ class Bus(sd.bus):
         sd.bus.default_system(bus)
         return bus
 
-    def message_new_method_call(self, destination, path, interface, member):
+    def message_new_method_call(self, destination, path, interface, member, types='', *args):
         message = BusMessage()
         super().message_new_method_call(message, destination, path, interface, member)
+        message.append(types, *args)
         return message
 
     def call(self, message, timeout=0):
