@@ -21,7 +21,7 @@ from ctypes import c_char, byref
 
 from .librarywrapper import utf8
 from .libsystemd import sd
-from .signature import parse_typestring
+from .signature import parse_signature
 
 
 class BusMessage(sd.bus_message):
@@ -41,8 +41,11 @@ class BusMessage(sd.bus_message):
                 self.append_with_info(child_info, child)
             self.close_container()
 
-    def append(self, typestring, value):
-        self.append_with_info(parse_typestring(typestring), value)
+    def append(self, typestring, *args):
+        infos = parse_signature(typestring)
+        assert len(infos) == len(args)
+        for info, arg in zip(infos, args):
+            self.append_with_info(info, arg)
 
     def yield_values(self):
         category_holder, contents_holder = c_char(), utf8()
