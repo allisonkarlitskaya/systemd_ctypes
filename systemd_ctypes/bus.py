@@ -130,7 +130,7 @@ class Bus(sd.bus):
             super().call(message, timeout, byref(error), reply)
             return reply
         except OSError as exc:
-            raise BusError(error.name.value, error.message.value, reply)
+            raise BusError(error.name.value, error.message.value, reply) from exc
 
     async def call_async(self, message, timeout):
         pending = PendingCall()
