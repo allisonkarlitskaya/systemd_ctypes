@@ -56,7 +56,7 @@ class TestAPI(dbusmock.DBusTestCase):
                                   ('s', out_sig),
                                   ('s', code),
                                   iface=dbusmock.MOCK_IFACE)
-        self.assertEqual(self.bus_user.call(message, -1).get_body(), ())
+        self.assertEqual(self.bus_user.call(message).get_body(), ())
 
     def async_call(self, message):
         loop = systemd_ctypes.Event.create_event_loop()
@@ -64,7 +64,7 @@ class TestAPI(dbusmock.DBusTestCase):
         result = None
         async def _call():
             nonlocal result
-            result = await self.bus_user.call_async(message, 1000000)
+            result = await self.bus_user.call_async(message)
 
         loop.run_until_complete(_call())
         return result
@@ -72,7 +72,7 @@ class TestAPI(dbusmock.DBusTestCase):
     def test_noarg_noret_sync(self):
         self.add_method('', 'Do', '', '', '')
         message = self.build_call('Do')
-        self.assertEqual(self.bus_user.call(message, -1).get_body(), ())
+        self.assertEqual(self.bus_user.call(message).get_body(), ())
         self.assertLog(b'^[0-9.]+ Do$')
 
     def test_noarg_noret_async(self):
@@ -85,7 +85,7 @@ class TestAPI(dbusmock.DBusTestCase):
         self.add_method('', 'Reverse', 's', 's', 'ret = "".join(reversed(args[0]))')
 
         message = self.build_call('Reverse', ('s', 'ab c'))
-        result = self.bus_user.call(message, -1).get_body()
+        result = self.bus_user.call(message).get_body()
         self.assertEqual(result, ('c ba',))
         self.assertLog(b'^[0-9.]+ Reverse "ab c"\n$')
 
@@ -101,7 +101,7 @@ class TestAPI(dbusmock.DBusTestCase):
         for val in [False, True]:
             message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Not')
             message = self.build_call('Not', ('b', val))
-            self.assertEqual(self.bus_user.call(message, -1).get_body(), (not val,))
+            self.assertEqual(self.bus_user.call(message).get_body(), (not val,))
 
     def test_int_sync(self):
         self.add_method('', 'Inc', 'yiuxt', 'yiuxt', 'ret = (args[0] + 1, args[1] + 1, args[2] + 1, args[3] + 1, args[4] + 1)')
@@ -112,7 +112,7 @@ class TestAPI(dbusmock.DBusTestCase):
                                   ('u', 0xFFFFFFFE),
                                   ('x', 0x7FFFFFFFFFFFFFFE),
                                   ('t', 0xFFFFFFFFFFFFFFFE))
-        result = self.bus_user.call(message, -1).get_body()
+        result = self.bus_user.call(message).get_body()
         self.assertEqual(result, (0x7F, 0x7FFFFFFF, 0xFFFFFFFF, 0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF))
 
     def test_int_async(self):
@@ -132,13 +132,13 @@ class TestAPI(dbusmock.DBusTestCase):
         self.add_method('', 'Inc', 'i', 'i', 'ret = args[0] + 1')
         message = self.build_call('Inc', ('i', 0x7FFFFFFF))
         with self.assertRaisesRegex(systemd_ctypes.BusError, 'OverflowError'):
-            self.bus_user.call(message, -1)
+            self.bus_user.call(message)
 
         # uint underflow
         self.add_method('', 'Dec', 'u', 'u', 'ret = args[0] - 1')
         message = self.build_call('Dec', ('u', 0))
         with self.assertRaisesRegex(systemd_ctypes.BusError, "OverflowError: can't convert negative value to unsigned int"):
-            self.bus_user.call(message, -1)
+            self.bus_user.call(message)
 
     def test_float(self):
         self.add_method('', 'Sq', 'd', 'd', 'ret = args[0] * args[0]')
@@ -153,31 +153,31 @@ class TestAPI(dbusmock.DBusTestCase):
     def test_array_output(self):
         self.add_method('', 'Echo', 'u', 'as', 'ret = ["echo"] * args[0]')
         message = self.build_call('Echo', ('u', 2))
-        self.assertEqual(self.bus_user.call(message, -1).get_body(), (['echo', 'echo'],))
+        self.assertEqual(self.bus_user.call(message).get_body(), (['echo', 'echo'],))
 
     def test_array_input(self):
         self.add_method('', 'Count', 'as', 'u', 'ret = len(args[0])')
         message = self.build_call('Count', ('as', ['first', 'second']))
-        self.assertEqual(self.bus_user.call(message, -1).get_body(), (2,))
+        self.assertEqual(self.bus_user.call(message).get_body(), (2,))
 
     def test_dict_output(self):
         self.add_method('', 'GetStrs', '', 'a{ss}', "ret = {'a': 'x', 'b': 'y'}")
         message = self.build_call('GetStrs')
-        self.assertEqual(self.bus_user.call(message, -1).get_body(), ({'a': 'x', 'b': 'y'},))
+        self.assertEqual(self.bus_user.call(message).get_body(), ({'a': 'x', 'b': 'y'},))
 
         self.add_method('', 'GetInts', '', 'a{ii}', "ret = {1: 42, 2: 99}")
         message = self.build_call('GetInts')
-        self.assertEqual(self.bus_user.call(message, -1).get_body(), ({1: 42, 2: 99},))
+        self.assertEqual(self.bus_user.call(message).get_body(), ({1: 42, 2: 99},))
 
         self.add_method('', 'GetVariants', '', 'a{sv}',
                         "ret = {'a': dbus.String('x', variant_level=1), 'b': dbus.Boolean(True, variant_level=1)}")
         message = self.build_call('GetVariants')
-        self.assertEqual(self.bus_user.call(message, -1).get_body(), ({'a': 'x', 'b': True},))
+        self.assertEqual(self.bus_user.call(message).get_body(), ({'a': 'x', 'b': True},))
 
     def test_dict_input(self):
         self.add_method('', 'CountStrs', 'a{ss}', 'u', 'ret = len(args[0])')
         message = self.build_call('CountStrs', ('a{ss}', {'a': 'x', 'b': 'y'}))
-        self.assertEqual(self.bus_user.call(message, -1).get_body(), (2,))
+        self.assertEqual(self.bus_user.call(message).get_body(), (2,))
 
         # TODO: Add more data types once int and variants work
 
@@ -185,7 +185,7 @@ class TestAPI(dbusmock.DBusTestCase):
         message = self.build_call('Do')
         with self.assertRaisesRegex(systemd_ctypes.BusError, '.*org.freedesktop.DBus.Error.UnknownMethod:.*'
                 'Do is not a valid method of interface org.freedesktop.Test.Main'):
-            self.bus_user.call(message, -1)
+            self.bus_user.call(message)
 
     def test_unknown_method_async(self):
         message = self.build_call('Do')
@@ -197,7 +197,7 @@ class TestAPI(dbusmock.DBusTestCase):
         self.add_method('', 'Boom', '', '', 'raise dbus.exceptions.DBusException("no good", name="com.example.Error.NoGood")')
         message = self.build_call('Boom')
         with self.assertRaisesRegex(systemd_ctypes.BusError, 'no good'):
-            self.bus_user.call(message, -1)
+            self.bus_user.call(message)
 
 
 if __name__ == '__main__':
