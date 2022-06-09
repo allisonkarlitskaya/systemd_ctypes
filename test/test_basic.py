@@ -150,6 +150,37 @@ class TestAPI(dbusmock.DBusTestCase):
         message = self.build_call('Parent', ('o', '/foo/bar/baz'))
         self.assertEqual(self.async_call(message).get_body(), ('/foo/bar',))
 
+    def test_array_output(self):
+        self.add_method('', 'Echo', 'u', 'as', 'ret = ["echo"] * args[0]')
+        message = self.build_call('Echo', ('u', 2))
+        self.assertEqual(self.bus_user.call(message, -1).get_body(), (['echo', 'echo'],))
+
+    def test_array_input(self):
+        self.add_method('', 'Count', 'as', 'u', 'ret = len(args[0])')
+        message = self.build_call('Count', ('as', ['first', 'second']))
+        self.assertEqual(self.bus_user.call(message, -1).get_body(), (2,))
+
+    def test_dict_output(self):
+        self.add_method('', 'GetStrs', '', 'a{ss}', "ret = {'a': 'x', 'b': 'y'}")
+        message = self.build_call('GetStrs')
+        self.assertEqual(self.bus_user.call(message, -1).get_body(), ({'a': 'x', 'b': 'y'},))
+
+        self.add_method('', 'GetInts', '', 'a{ii}', "ret = {1: 42, 2: 99}")
+        message = self.build_call('GetInts')
+        self.assertEqual(self.bus_user.call(message, -1).get_body(), ({1: 42, 2: 99},))
+
+        self.add_method('', 'GetVariants', '', 'a{sv}',
+                        "ret = {'a': dbus.String('x', variant_level=1), 'b': dbus.Boolean(True, variant_level=1)}")
+        message = self.build_call('GetVariants')
+        self.assertEqual(self.bus_user.call(message, -1).get_body(), ({'a': 'x', 'b': True},))
+
+    def test_dict_input(self):
+        self.add_method('', 'CountStrs', 'a{ss}', 'u', 'ret = len(args[0])')
+        message = self.build_call('CountStrs', ('a{ss}', {'a': 'x', 'b': 'y'}))
+        self.assertEqual(self.bus_user.call(message, -1).get_body(), (2,))
+
+        # TODO: Add more data types once int and variants work
+
     def test_unknown_method_sync(self):
         message = self.build_call('Do')
         with self.assertRaisesRegex(systemd_ctypes.BusError, '.*org.freedesktop.DBus.Error.UnknownMethod:.*'
