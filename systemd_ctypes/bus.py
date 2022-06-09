@@ -36,7 +36,7 @@ class BusMessage(sd.bus_message):
             child_info_iter = itertools.repeat(child_info) if category == 'a' else child_info
             value_iter = value.items() if child_info[0] == 'e' else value
 
-            self.open_container(category, contents)
+            self.open_container(ord(category), contents)
             for child_info, child in zip(child_info_iter, value_iter):
                 self.append_with_info(child_info, child)
             self.close_container()
