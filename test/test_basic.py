@@ -22,6 +22,10 @@ import sys
 import dbusmock
 import systemd_ctypes
 
+
+TEST_ADDR = ('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main')
+
+
 class TestAPI(dbusmock.DBusTestCase):
     @classmethod
     def setUpClass(cls):
@@ -31,10 +35,7 @@ class TestAPI(dbusmock.DBusTestCase):
 
     def setUp(self):
         self.mock_log = tempfile.NamedTemporaryFile()
-        self.p_mock = self.spawn_server('org.freedesktop.Test',
-                                        '/',
-                                        'org.freedesktop.Test.Main',
-                                        stdout=self.mock_log)
+        self.p_mock = self.spawn_server(*TEST_ADDR, stdout=self.mock_log)
         self.addCleanup(self.p_mock.wait)
         self.addCleanup(self.p_mock.terminate)
 
@@ -42,21 +43,10 @@ class TestAPI(dbusmock.DBusTestCase):
         with open(self.mock_log.name, "rb") as f:
             self.assertRegex(f.read(), regex)
 
-    def build_call(self, method_name, *args, iface='org.freedesktop.Test.Main'):
-        message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', iface, method_name)
-        for (type_, val) in args:
-            message.append(type_, val)
-        return message
-
     def add_method(self, iface, name, in_sig, out_sig, code):
-        message = self.build_call('AddMethod',
-                                  ('s', iface),
-                                  ('s', name),
-                                  ('s', in_sig),
-                                  ('s', out_sig),
-                                  ('s', code),
-                                  iface=dbusmock.MOCK_IFACE)
-        self.assertEqual(self.bus_user.call(message).get_body(), ())
+        result = self.bus_user.call_method('org.freedesktop.Test', '/', dbusmock.MOCK_IFACE, 'AddMethod', 'sssss',
+                                           iface, name, in_sig, out_sig, code)
+        self.assertEqual(result, ())
 
     def async_call(self, message):
         loop = systemd_ctypes.Event.create_event_loop()
@@ -71,133 +61,117 @@ class TestAPI(dbusmock.DBusTestCase):
 
     def test_noarg_noret_sync(self):
         self.add_method('', 'Do', '', '', '')
-        message = self.build_call('Do')
-        self.assertEqual(self.bus_user.call(message).get_body(), ())
+        result = self.bus_user.call_method(*TEST_ADDR, 'Do')
+        self.assertEqual(result, ())
         self.assertLog(b'^[0-9.]+ Do$')
 
     def test_noarg_noret_async(self):
         self.add_method('', 'Do', '', '', '')
-        message = self.build_call('Do')
+        message = self.bus_user.message_new_method_call(*TEST_ADDR, 'Do')
         self.assertEqual(self.async_call(message).get_body(), ())
         self.assertLog(b'^[0-9.]+ Do$')
 
     def test_strarg_strret_sync(self):
         self.add_method('', 'Reverse', 's', 's', 'ret = "".join(reversed(args[0]))')
 
-        message = self.build_call('Reverse', ('s', 'ab c'))
-        result = self.bus_user.call(message).get_body()
+        result = self.bus_user.call_method(*TEST_ADDR, 'Reverse', 's', 'ab c')
         self.assertEqual(result, ('c ba',))
         self.assertLog(b'^[0-9.]+ Reverse "ab c"\n$')
 
     def test_strarg_strret_async(self):
         self.add_method('', 'Reverse', 's', 's', 'ret = "".join(reversed(args[0]))')
-        message = self.build_call('Reverse', ('s', 'ab c'))
+        message = self.bus_user.message_new_method_call(*TEST_ADDR, 'Reverse', 's', 'ab c')
         self.assertEqual(self.async_call(message).get_body(), ('c ba',))
         self.assertLog(b'^[0-9.]+ Reverse "ab c"\n$')
 
-    def test_bool_sync(self):
+    def test_bool(self):
         self.add_method('', 'Not', 'b', 'b', 'ret = not args[0]')
 
         for val in [False, True]:
-            message = self.bus_user.message_new_method_call('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main', 'Not')
-            message = self.build_call('Not', ('b', val))
-            self.assertEqual(self.bus_user.call(message).get_body(), (not val,))
+            result = self.bus_user.call_method(*TEST_ADDR, 'Not', 'b', val)
+            self.assertEqual(result, (not val,))
 
     def test_int_sync(self):
         self.add_method('', 'Inc', 'yiuxt', 'yiuxt', 'ret = (args[0] + 1, args[1] + 1, args[2] + 1, args[3] + 1, args[4] + 1)')
 
-        message = self.build_call('Inc',
-                                  ('y', 0x7E),
-                                  ('i', 0x7FFFFFFE),
-                                  ('u', 0xFFFFFFFE),
-                                  ('x', 0x7FFFFFFFFFFFFFFE),
-                                  ('t', 0xFFFFFFFFFFFFFFFE))
-        result = self.bus_user.call(message).get_body()
+        result = self.bus_user.call_method(*TEST_ADDR, 'Inc', 'yiuxt',
+                                           0x7E, 0x7FFFFFFE, 0xFFFFFFFE, 0x7FFFFFFFFFFFFFFE, 0xFFFFFFFFFFFFFFFE)
         self.assertEqual(result, (0x7F, 0x7FFFFFFF, 0xFFFFFFFF, 0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF))
 
     def test_int_async(self):
         self.add_method('', 'Dec', 'yiuxt', 'yiuxt', 'ret = (args[0] - 1, args[1] - 1, args[2] - 1, args[3] - 1, args[4] - 1)')
 
-        message = self.build_call('Dec',
-                                  ('y', 1),
-                                  ('i', -0x7FFFFFFF),
-                                  ('u', 1),
-                                  ('x', -0x7FFFFFFFFFFFFFFF),
-                                  ('t', 1))
-        result = self.async_call(message).get_body()
-        self.assertEqual(result, (0, -0x80000000, 0, -0x8000000000000000, 0))
+        message = self.bus_user.message_new_method_call(*TEST_ADDR, 'Dec', 'yiuxt',
+                                                        1, -0x7FFFFFFF, 1, -0x7FFFFFFFFFFFFFFF, 1)
+        self.assertEqual(self.async_call(message).get_body(), (0, -0x80000000, 0, -0x8000000000000000, 0))
 
     def test_int_error(self):
         # int overflow
         self.add_method('', 'Inc', 'i', 'i', 'ret = args[0] + 1')
-        message = self.build_call('Inc', ('i', 0x7FFFFFFF))
         with self.assertRaisesRegex(systemd_ctypes.BusError, 'OverflowError'):
-            self.bus_user.call(message)
+            self.bus_user.call_method(*TEST_ADDR, 'Inc', 'i', 0x7FFFFFFF)
 
         # uint underflow
         self.add_method('', 'Dec', 'u', 'u', 'ret = args[0] - 1')
-        message = self.build_call('Dec', ('u', 0))
         with self.assertRaisesRegex(systemd_ctypes.BusError, "OverflowError: can't convert negative value to unsigned int"):
-            self.bus_user.call(message)
+            self.bus_user.call_method(*TEST_ADDR, 'Dec', 'u', 0)
 
     def test_float(self):
         self.add_method('', 'Sq', 'd', 'd', 'ret = args[0] * args[0]')
-        message = self.build_call('Sq', ('d', -5.5))
-        self.assertAlmostEqual(self.async_call(message).get_body()[0], 30.25)
+        result = self.bus_user.call_method(*TEST_ADDR, 'Sq', 'd', -5.5)
+        self.assertAlmostEqual(result[0], 30.25)
 
     def test_objpath(self):
         self.add_method('', 'Parent', 'o', 'o', "ret = '/'.join(args[0].split('/')[:-1])")
-        message = self.build_call('Parent', ('o', '/foo/bar/baz'))
-        self.assertEqual(self.async_call(message).get_body(), ('/foo/bar',))
+        result = self.bus_user.call_method(*TEST_ADDR, 'Parent', 'o', '/foo/bar/baz')
+        self.assertEqual(result, ('/foo/bar',))
 
     def test_array_output(self):
         self.add_method('', 'Echo', 'u', 'as', 'ret = ["echo"] * args[0]')
-        message = self.build_call('Echo', ('u', 2))
-        self.assertEqual(self.bus_user.call(message).get_body(), (['echo', 'echo'],))
+        result = self.bus_user.call_method(*TEST_ADDR, 'Echo', 'u', 2)
+        self.assertEqual(result, (['echo', 'echo'],))
 
     def test_array_input(self):
         self.add_method('', 'Count', 'as', 'u', 'ret = len(args[0])')
-        message = self.build_call('Count', ('as', ['first', 'second']))
-        self.assertEqual(self.bus_user.call(message).get_body(), (2,))
+        result = self.bus_user.call_method(*TEST_ADDR, 'Count', 'as', ['first', 'second'])
+        self.assertEqual(result, (2,))
 
     def test_dict_output(self):
         self.add_method('', 'GetStrs', '', 'a{ss}', "ret = {'a': 'x', 'b': 'y'}")
-        message = self.build_call('GetStrs')
-        self.assertEqual(self.bus_user.call(message).get_body(), ({'a': 'x', 'b': 'y'},))
+        result = self.bus_user.call_method(*TEST_ADDR, 'GetStrs')
+        self.assertEqual(result, ({'a': 'x', 'b': 'y'},))
 
         self.add_method('', 'GetInts', '', 'a{ii}', "ret = {1: 42, 2: 99}")
-        message = self.build_call('GetInts')
-        self.assertEqual(self.bus_user.call(message).get_body(), ({1: 42, 2: 99},))
+        result = self.bus_user.call_method(*TEST_ADDR, 'GetInts')
+        self.assertEqual(result, ({1: 42, 2: 99},))
 
         self.add_method('', 'GetVariants', '', 'a{sv}',
                         "ret = {'a': dbus.String('x', variant_level=1), 'b': dbus.Boolean(True, variant_level=1)}")
-        message = self.build_call('GetVariants')
-        self.assertEqual(self.bus_user.call(message).get_body(), ({'a': 'x', 'b': True},))
+        result = self.bus_user.call_method(*TEST_ADDR, 'GetVariants')
+        self.assertEqual(result, ({'a': 'x', 'b': True},))
 
     def test_dict_input(self):
         self.add_method('', 'CountStrs', 'a{ss}', 'u', 'ret = len(args[0])')
-        message = self.build_call('CountStrs', ('a{ss}', {'a': 'x', 'b': 'y'}))
-        self.assertEqual(self.bus_user.call(message).get_body(), (2,))
+        result = self.bus_user.call_method(*TEST_ADDR, 'CountStrs', 'a{ss}', {'a': 'x', 'b': 'y'})
+        self.assertEqual(result, (2,))
 
         # TODO: Add more data types once int and variants work
 
     def test_unknown_method_sync(self):
-        message = self.build_call('Do')
         with self.assertRaisesRegex(systemd_ctypes.BusError, '.*org.freedesktop.DBus.Error.UnknownMethod:.*'
                 'Do is not a valid method of interface org.freedesktop.Test.Main'):
-            self.bus_user.call(message)
+            self.bus_user.call_method(*TEST_ADDR, 'Do')
 
     def test_unknown_method_async(self):
-        message = self.build_call('Do')
+        message = self.bus_user.message_new_method_call(*TEST_ADDR, 'Do')
         with self.assertRaisesRegex(systemd_ctypes.BusError, '.*org.freedesktop.DBus.Error.UnknownMethod:.*'
                 'Do is not a valid method of interface org.freedesktop.Test.Main'):
             self.async_call(message).get_body()
 
     def test_custom_error(self):
         self.add_method('', 'Boom', '', '', 'raise dbus.exceptions.DBusException("no good", name="com.example.Error.NoGood")')
-        message = self.build_call('Boom')
         with self.assertRaisesRegex(systemd_ctypes.BusError, 'no good'):
-            self.bus_user.call(message)
+            self.bus_user.call_method(*TEST_ADDR, 'Boom')
 
 
 if __name__ == '__main__':
