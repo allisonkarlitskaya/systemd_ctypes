@@ -17,7 +17,11 @@
 
 import asyncio
 import selectors
+import sys
 
+from ctypes import byref, addressof, cast
+
+from . import inotify
 from .libsystemd import sd
 
 
@@ -52,3 +56,14 @@ class Event(sd.event):
         loop = asyncio.SelectorEventLoop(selector)
         asyncio.set_event_loop(loop)
         return loop
+
+    def add_inotify(self, path, mask, handler):
+        @sd.event_inotify_handler_t
+        def wrapper(source, _event, userdata):
+            event = _event.contents
+            handler(inotify.Event(event.mask), event.cookie, event.name if event.len else None)
+            return 0
+        source = sd.event_source()
+        source.wrapper = wrapper
+        super().add_inotify(byref(source), path, mask, source.wrapper, None)
+        return source

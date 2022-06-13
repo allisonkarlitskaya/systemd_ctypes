@@ -17,6 +17,7 @@
 
 from ctypes import *
 
+from .inotify import inotify_event
 from .librarywrapper import *
 
 
@@ -39,9 +40,11 @@ sd.register_reference_types([
     'bus_message',
     'bus_slot',
     'event',
+    'event_source',
 ])
 
 sd.bus_message_handler_t = CFUNCTYPE(c_int, sd.bus_message_p, c_void_p, POINTER(sd.bus_error))
+sd.event_inotify_handler_t = CFUNCTYPE(c_int, sd.event_source_p, POINTER(inotify_event), c_void_p)
 
 sd.event.register_methods([
     (staticmethod, negative_errno, 'default', [POINTER(sd.event_p)]),
@@ -50,6 +53,7 @@ sd.event.register_methods([
     (instancemethod, negative_errno, 'dispatch', []),
     (instancemethod, negative_errno, 'get_fd', []),
     (instancemethod, negative_errno, 'loop', []),
+    (instancemethod, negative_errno, 'add_inotify', [POINTER(sd.event_source), utf8, c_uint32, sd.event_inotify_handler_t, c_void_p]),
 ])
 
 BASIC_TYPE_MAP = {
