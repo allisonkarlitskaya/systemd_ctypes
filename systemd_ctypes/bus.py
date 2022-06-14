@@ -60,7 +60,7 @@ class BusMessage(sd.bus_message):
                 if category == 'a':
                     constructor = dict if contents.startswith('{') else list
                 elif category == 'v':
-                    constructor = next
+                    constructor = lambda i: {"t": contents, "v": next(i)}
                 else:
                     constructor = tuple
 

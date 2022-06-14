@@ -148,7 +148,7 @@ class TestAPI(dbusmock.DBusTestCase):
         self.add_method('', 'GetVariants', '', 'a{sv}',
                         "ret = {'a': dbus.String('x', variant_level=1), 'b': dbus.Boolean(True, variant_level=1)}")
         result = self.bus_user.call_method(*TEST_ADDR, 'GetVariants')
-        self.assertEqual(result, ({'a': 'x', 'b': True},))
+        self.assertEqual(result, ({'a': {'t': 's', 'v': 'x'}, 'b': {'t': 'b', 'v': True}},))
 
     def test_dict_input(self):
         self.add_method('', 'CountStrs', 'a{ss}', 'u', 'ret = len(args[0])')
