@@ -127,17 +127,22 @@ class PendingCall(Slot):
 
 
 class Bus(sd.bus):
-    @staticmethod
-    def default_user():
-        bus = Bus()
-        sd.bus.default_user(bus)
-        return bus
+    _default_system = None
+    _default_user = None
 
     @staticmethod
     def default_system():
-        bus = Bus()
-        sd.bus.default_system(bus)
-        return bus
+        if not Bus._default_system:
+            Bus._default_system = Bus()
+            sd.bus.default_system(Bus._default_system)
+        return Bus._default_system
+
+    @staticmethod
+    def default_user():
+        if not Bus._default_user:
+            Bus._default_user = Bus()
+            sd.bus.default_user(Bus._default_user)
+        return Bus._default_user
 
     def message_new_method_call(self, destination, path, interface, member, types='', *args):
         message = BusMessage()

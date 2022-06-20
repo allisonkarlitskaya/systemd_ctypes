@@ -26,6 +26,8 @@ from .libsystemd import sd
 
 
 class Event(sd.event):
+    _default = None
+
     # This is all a bit more awkward than it should have to be: systemd's event
     # loop chaining model is designed for glib's prepare/check/dispatch paradigm;
     # failing to call prepare() can lead to deadlocks, for example.
@@ -47,9 +49,10 @@ class Event(sd.event):
 
     @staticmethod
     def default():
-        event = Event()
-        sd.event.default(event)
-        return event
+        if not Event._default:
+            Event._default = Event()
+            sd.event.default(Event._default)
+        return Event._default
 
     def create_event_loop(self=None):
         selector = Event.Selector(self or Event.default())
