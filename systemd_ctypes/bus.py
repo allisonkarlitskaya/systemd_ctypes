@@ -16,6 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import asyncio
+import base64
 import itertools
 from ctypes import c_char, byref
 
@@ -34,6 +35,10 @@ class BusMessage(sd.bus_message):
             return
         except KeyError:
             pass
+
+        # Support base64 encoding of binary blobs
+        if category == 'a' and contents == 'y' and isinstance(value, str):
+            value = base64.b64decode(value)
 
         # Containers
         child_info_iter = itertools.repeat(child_info) if category == 'a' else child_info
@@ -73,6 +78,11 @@ class BusMessage(sd.bus_message):
             self.enter_container(ord(category), contents)
             value = constructor(self.yield_values())
             self.exit_container()
+
+            # base64 encode binary blobs
+            if category == 'a' and contents == 'y':
+                value = base64.b64encode(bytes(value)).decode('ascii')
+
             yield value
 
     def get_body(self):
