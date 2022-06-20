@@ -143,28 +143,28 @@ class Bus(sd.bus):
         message.append(types, *args)
         return message
 
-    def call(self, message, timeout=0):
+    def call(self, message, timeout=None):
         reply = BusMessage()
         error = sd.bus_error()
         try:
-            super().call(message, timeout, byref(error), reply)
+            super().call(message, timeout or 0, byref(error), reply)
             return reply
         except OSError as exc:
             raise BusError(error.name.value, error.message.value, reply) from exc
 
-    def call_method(self, destination, path, interface, member, types='', *args):
+    def call_method(self, destination, path, interface, member, types='', *args, timeout=None):
         message = self.message_new_method_call(destination, path, interface, member, types, *args)
-        message = self.call(message)
+        message = self.call(message, timeout)
         return message.get_body()
 
-    async def call_async(self, message, timeout=0):
+    async def call_async(self, message, timeout=None):
         pending = PendingCall()
-        super().call_async(pending, message, pending.callback, pending.userdata, timeout)
+        super().call_async(pending, message, pending.callback, pending.userdata, timeout or 0)
         return await pending.future
 
-    async def call_method_async(self, destination, path, interface, member, types='', *args):
+    async def call_method_async(self, destination, path, interface, member, types='', *args, timeout=None):
         message = self.message_new_method_call(destination, path, interface, member, types, *args)
-        message = await self.call_async(message)
+        message = await self.call_async(message, timeout)
         return message.get_body()
 
     def add_match(self, rule, handler):
