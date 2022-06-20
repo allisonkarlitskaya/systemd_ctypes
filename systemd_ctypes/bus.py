@@ -18,12 +18,14 @@
 import asyncio
 import base64
 import itertools
+import logging
 from ctypes import c_char, byref
 
 from .librarywrapper import utf8
 from .libsystemd import sd
 from .signature import parse_signature
 
+logger = logging.getLogger(__name__)
 
 class BusMessage(sd.bus_message):
     def append_with_info(self, typeinfo, value):
@@ -153,6 +155,8 @@ class Bus(sd.bus):
             raise BusError(error.name.value, error.message.value, reply) from exc
 
     def call_method(self, destination, path, interface, member, types='', *args, timeout=None):
+        logger.debug('Doing sync method call %s %s %s %s %s %s',
+                destination, path, interface, member, types, args)
         message = self.message_new_method_call(destination, path, interface, member, types, *args)
         message = self.call(message, timeout)
         return message.get_body()
@@ -163,6 +167,8 @@ class Bus(sd.bus):
         return await pending.future
 
     async def call_method_async(self, destination, path, interface, member, types='', *args, timeout=None):
+        logger.debug('Doing async method call %s %s %s %s %s %s',
+                destination, path, interface, member, types, args)
         message = self.message_new_method_call(destination, path, interface, member, types, *args)
         message = await self.call_async(message, timeout)
         return message.get_body()
