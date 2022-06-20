@@ -15,7 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from systemd_ctypes import Bus, Event, introspection
+import asyncio
+
+from systemd_ctypes import Bus, Event, EventLoopPolicy, introspection
 
 
 def property_changed(message):
@@ -41,8 +43,9 @@ async def main():
                                             's', 'org.freedesktop.hostname1')
     print(items)
 
-    return system.add_match("interface='org.freedesktop.DBus.Properties'", property_changed)
+    slot = system.add_match("interface='org.freedesktop.DBus.Properties'", property_changed)
+    await asyncio.sleep(1000)
 
-loop = Event.create_event_loop()
-SLOT = loop.run_until_complete(main())
-loop.run_forever()
+
+asyncio.set_event_loop_policy(EventLoopPolicy())
+asyncio.run(main())

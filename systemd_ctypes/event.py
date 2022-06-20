@@ -28,37 +28,12 @@ from .libsystemd import sd
 class Event(sd.event):
     _default = None
 
-    # This is all a bit more awkward than it should have to be: systemd's event
-    # loop chaining model is designed for glib's prepare/check/dispatch paradigm;
-    # failing to call prepare() can lead to deadlocks, for example.
-    #
-    # Hack a selector subclass which calls prepare() before sleeping and this for us.
-    class Selector(selectors.DefaultSelector):
-        def __init__(self, event=None):
-            super().__init__()
-            self.sd_event = event or Event.default()
-            self.key = self.register(event.get_fd(), selectors.EVENT_READ)
-
-        def select(self, timeout=None):
-            self.sd_event.prepare()
-            ready = super().select(timeout)
-            if self.sd_event.wait(0):
-                self.sd_event.dispatch()
-            # NB: this could return zero events with infinite timeout, but nobody seems to mind.
-            return [(key, events) for (key, events) in ready if key != self.key]
-
     @staticmethod
     def default():
         if not Event._default:
             Event._default = Event()
             sd.event.default(Event._default)
         return Event._default
-
-    def create_event_loop(self=None):
-        selector = Event.Selector(self or Event.default())
-        loop = asyncio.SelectorEventLoop(selector)
-        asyncio.set_event_loop(loop)
-        return loop
 
     def add_inotify(self, path, mask, handler):
         @sd.event_inotify_handler_t
@@ -70,3 +45,28 @@ class Event(sd.event):
         source.wrapper = wrapper
         super().add_inotify(byref(source), path, mask, source.wrapper, None)
         return source
+
+
+# This is all a bit more awkward than it should have to be: systemd's event
+# loop chaining model is designed for glib's prepare/check/dispatch paradigm;
+# failing to call prepare() can lead to deadlocks, for example.
+#
+# Hack a selector subclass which calls prepare() before sleeping and this for us.
+class Selector(selectors.DefaultSelector):
+    def __init__(self, event=None):
+        super().__init__()
+        self.sd_event = event or Event.default()
+        self.key = self.register(self.sd_event.get_fd(), selectors.EVENT_READ)
+
+    def select(self, timeout=None):
+        self.sd_event.prepare()
+        ready = super().select(timeout)
+        if self.sd_event.wait(0):
+            self.sd_event.dispatch()
+        # NB: this could return zero events with infinite timeout, but nobody seems to mind.
+        return [(key, events) for (key, events) in ready if key != self.key]
+
+
+class EventLoopPolicy(asyncio.DefaultEventLoopPolicy):
+    def new_event_loop(self):
+        return asyncio.SelectorEventLoop(Selector())

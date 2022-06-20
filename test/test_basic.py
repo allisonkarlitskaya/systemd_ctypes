@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import asyncio
 import tempfile
 import unittest
 import sys
@@ -49,14 +50,14 @@ class TestAPI(dbusmock.DBusTestCase):
         self.assertEqual(result, ())
 
     def async_call(self, message):
-        loop = systemd_ctypes.Event.create_event_loop()
+        asyncio.set_event_loop_policy(systemd_ctypes.EventLoopPolicy())
 
         result = None
         async def _call():
             nonlocal result
             result = await self.bus_user.call_async(message)
 
-        loop.run_until_complete(_call())
+        asyncio.run(_call())
         return result
 
     def test_noarg_noret_sync(self):
