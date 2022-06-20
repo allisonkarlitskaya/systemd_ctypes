@@ -33,6 +33,9 @@ class utf8(ctypes.c_char_p):
             value = value.encode('utf-8')
         super().__init__(value)
 
+    def errcheck(self, func, _args):
+        return self.value
+
     @classmethod
     def from_param(cls, value):
         return cls(value)

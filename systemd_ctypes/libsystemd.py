@@ -78,6 +78,8 @@ def basic_type_out(func):
     return wrapper
 
 sd.bus_message.register_methods([
+    (basic_type_in, negative_errno, 'append_basic', [sd.bus_message_p, c_char, c_void_p]),
+    (basic_type_out, negative_errno, 'read_basic', [sd.bus_message_p, c_char, c_void_p]),
     (instancemethod, POINTER(sd.bus_error), 'get_error', []),
     (instancemethod, negative_errno, 'at_end', [boolint]),
     (instancemethod, negative_errno, 'close_container', []),
@@ -87,8 +89,11 @@ sd.bus_message.register_methods([
     (instancemethod, negative_errno, 'open_container', [c_char, utf8]),
     (instancemethod, negative_errno, 'peek_type', [POINTER(c_char), POINTER(utf8)]),
     (instancemethod, negative_errno, 'rewind', [boolint]),
-    (basic_type_in, negative_errno, 'append_basic', [sd.bus_message_p, c_char, c_void_p]),
-    (basic_type_out, negative_errno, 'read_basic', [sd.bus_message_p, c_char, c_void_p]),
+    (instancemethod, utf8, 'get_destination', []),
+    (instancemethod, utf8, 'get_interface', []),
+    (instancemethod, utf8, 'get_member', []),
+    (instancemethod, utf8, 'get_path', []),
+    (instancemethod, utf8, 'get_sender', []),
     (instancemethod, utf8, 'get_signature', [boolint]),
 ])
 
