@@ -31,15 +31,18 @@ class BusMessage(sd.bus_message):
         try:
             # Basic types
             self.append_basic(category, value)
+            return
         except KeyError:
-            # Containers
-            child_info_iter = itertools.repeat(child_info) if category == 'a' else child_info
-            value_iter = value.items() if child_info[0] == 'e' else value
+            pass
 
-            self.open_container(ord(category), contents)
-            for child_info, child in zip(child_info_iter, value_iter):
-                self.append_with_info(child_info, child)
-            self.close_container()
+        # Containers
+        child_info_iter = itertools.repeat(child_info) if category == 'a' else child_info
+        value_iter = value.items() if child_info[0] == 'e' else value
+
+        self.open_container(ord(category), contents)
+        for child_info, child in zip(child_info_iter, value_iter):
+            self.append_with_info(child_info, child)
+        self.close_container()
 
     def append(self, typestring, *args):
         infos = parse_signature(typestring)
@@ -55,19 +58,22 @@ class BusMessage(sd.bus_message):
             try:
                 # Basic types
                 yield self.read_basic(category)
+                continue
             except KeyError:
-                # Containers
-                if category == 'a':
-                    constructor = dict if contents.startswith('{') else list
-                elif category == 'v':
-                    constructor = lambda i: {"t": contents, "v": next(i)}
-                else:
-                    constructor = tuple
+                pass
 
-                self.enter_container(ord(category), contents)
-                value = constructor(self.yield_values())
-                self.exit_container()
-                yield value
+            # Containers
+            if category == 'a':
+                constructor = dict if contents.startswith('{') else list
+            elif category == 'v':
+                constructor = lambda i: {"t": contents, "v": next(i)}
+            else:
+                constructor = tuple
+
+            self.enter_container(ord(category), contents)
+            value = constructor(self.yield_values())
+            self.exit_container()
+            yield value
 
     def get_body(self):
         self.rewind(True)
