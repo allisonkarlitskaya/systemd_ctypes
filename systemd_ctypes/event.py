@@ -47,6 +47,18 @@ class Event(sd.event):
         return source
 
 
+    def add_inotify_fd(self, fd, mask, handler):
+        @sd.event_inotify_handler_t
+        def wrapper(source, _event, userdata):
+            event = _event.contents
+            handler(inotify.Event(event.mask), event.cookie, event.name if event.len else None)
+            return 0
+        source = sd.event_source()
+        source.wrapper = wrapper
+        super().add_inotify_fd(byref(source), fd, mask, source.wrapper, None)
+        return source
+
+
 # This is all a bit more awkward than it should have to be: systemd's event
 # loop chaining model is designed for glib's prepare/check/dispatch paradigm;
 # failing to call prepare() can lead to deadlocks, for example.

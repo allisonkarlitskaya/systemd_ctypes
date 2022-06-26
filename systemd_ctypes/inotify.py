@@ -34,8 +34,20 @@ class inotify_event(ctypes.Structure):
         return ctypes.cast(ctypes.addressof(self), ctypes.POINTER(event_with_name)).contents.name
 
 
-Event = enum.Flag('inotify.Event', ['ACCESS', 'MODIFY', 'ATTRIB', 'CLOSE_WRITE', 'CLOSE_NOWRITE',
-    'OPEN', 'MOVED_FROM', 'MOVED_TO', 'CREATE', 'DELETE', 'DELETE_SELF', 'MOVE_SELF', '_unused_0x1000',
-    'UNMOUNT', 'Q_OVERFLOW', 'IGNORED'])
+Event = enum.IntFlag('inotify.Event', [
+    'ACCESS', 'MODIFY', 'ATTRIB', 'CLOSE_WRITE',
+    'CLOSE_NOWRITE', 'OPEN', 'MOVED_FROM', 'MOVED_TO',
+    'CREATE', 'DELETE', 'DELETE_SELF', 'MOVE_SELF',
+    '_unused_0x1000', 'UNMOUNT', 'Q_OVERFLOW', 'IGNORED',
+    '_unused_0x10000', '_unused_0x20000', '_unused_0x40000', '_unused_0x80000',
+    '_unused_0x100000', '_unused_0x200000', '_unused_0x400000', '_unused_0x800000',
+    'ONLYDIR', 'DONT_FOLLOW', 'EXCL_UNLINK', '_unused_0x8000000',
+    'MASK_CREATE', 'MASK_ADD', 'ISDIR', 'ONESHOE'
+
+    ])
 Event.CLOSE = Event.CLOSE_WRITE | Event.CLOSE_NOWRITE
 Event.MOVE = Event.MOVED_FROM | Event.MOVED_TO
+
+# non-standard.  All "change" events (ie: excluding read-only events)
+Event.CHANGED = Event.MODIFY | Event.ATTRIB | Event.CLOSE_WRITE | Event.MOVE | \
+                Event.CREATE | Event.DELETE | Event.DELETE_SELF | Event.MOVE_SELF

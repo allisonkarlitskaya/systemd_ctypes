@@ -47,13 +47,15 @@ sd.bus_message_handler_t = CFUNCTYPE(c_int, sd.bus_message_p, c_void_p, POINTER(
 sd.event_inotify_handler_t = CFUNCTYPE(c_int, sd.event_source_p, POINTER(inotify_event), c_void_p)
 
 sd.event.register_methods([
-    (staticmethod, negative_errno, 'default', [POINTER(sd.event_p)]),
-    (instancemethod, negative_errno, 'prepare', []),
-    (instancemethod, negative_errno, 'wait', [c_uint64]),
+    (instancemethod, negative_errno, 'add_inotify', [POINTER(sd.event_source), utf8, c_uint32, sd.event_inotify_handler_t, c_void_p]),
+    (instancemethod, negative_errno, 'add_inotify_fd', [POINTER(sd.event_source), c_int, c_uint32, sd.event_inotify_handler_t, c_void_p]),
     (instancemethod, negative_errno, 'dispatch', []),
     (instancemethod, negative_errno, 'get_fd', []),
+    (instancemethod, negative_errno, 'get_state', []),
     (instancemethod, negative_errno, 'loop', []),
-    (instancemethod, negative_errno, 'add_inotify', [POINTER(sd.event_source), utf8, c_uint32, sd.event_inotify_handler_t, c_void_p]),
+    (instancemethod, negative_errno, 'prepare', []),
+    (instancemethod, negative_errno, 'wait', [c_uint64]),
+    (staticmethod, negative_errno, 'default', [POINTER(sd.event_p)]),
 ])
 
 BASIC_TYPE_MAP = {
