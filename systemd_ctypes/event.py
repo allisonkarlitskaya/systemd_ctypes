@@ -59,7 +59,8 @@ class Selector(selectors.DefaultSelector):
         self.key = self.register(self.sd_event.get_fd(), selectors.EVENT_READ)
 
     def select(self, timeout=None):
-        self.sd_event.prepare()
+        while self.sd_event.prepare():
+            self.sd_event.dispatch()
         ready = super().select(timeout)
         if self.sd_event.wait(0):
             self.sd_event.dispatch()
