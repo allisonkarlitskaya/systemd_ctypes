@@ -21,3 +21,4 @@ __version__ = "0"
 
 from .bus import Bus, BusError, BusMessage
 from .event import Event, EventLoopPolicy
+from .pathwatch import PathWatch
