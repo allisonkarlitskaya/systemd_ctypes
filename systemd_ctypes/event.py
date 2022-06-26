@@ -62,8 +62,12 @@ class Selector(selectors.DefaultSelector):
         while self.sd_event.prepare():
             self.sd_event.dispatch()
         ready = super().select(timeout)
-        if self.sd_event.wait(0):
+        # workaround https://github.com/systemd/systemd/issues/23826
+        # keep calling wait() until there's nothing left
+        while self.sd_event.wait(0):
             self.sd_event.dispatch()
+            while self.sd_event.prepare():
+                self.sd_event.dispatch()
         # NB: this could return zero events with infinite timeout, but nobody seems to mind.
         return [(key, events) for (key, events) in ready if key != self.key]
 
