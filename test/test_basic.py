@@ -57,7 +57,12 @@ class TestAPI(dbusmock.DBusTestCase):
             nonlocal result
             result = await self.bus_user.call_async(message)
 
-        asyncio.run(_call())
+        if sys.version_info >= (3, 7, 0):
+            asyncio.run(_call())
+        else:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(_call())
+
         return result
 
     def test_noarg_noret_sync(self):
