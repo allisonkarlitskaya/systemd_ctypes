@@ -53,9 +53,7 @@ jobs:
       - name: Run test
         uses: uraimo/run-on-arch-action@v2
         with:
-          distro: ubuntu_latest
+          distro: fedora_latest
           arch: ${{ matrix.arch }}
-          install: |
-            apt-get update
-            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-dbusmock libsystemd0
+          install: dnf install -y python3-dbusmock systemd-libs
           run: test/run
