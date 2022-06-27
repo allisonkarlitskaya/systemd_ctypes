@@ -12,6 +12,7 @@ jobs:
         container:
           - docker.io/debian:unstable
           - registry.fedoraproject.org/fedora:rawhide
+          - quay.io/centos/centos:stream8
 
     container:
       image: ${{ matrix.container }}
@@ -26,6 +27,9 @@ jobs:
           if type apt >/dev/null 2>&1; then
               apt-get update
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-dbusmock libsystemd0
+          elif grep -q platform:el8 /etc/os-release; then
+              dnf install -y python3-pip systemd-libs
+              pip3 install python-dbusmock==0.26.1
           else
               dnf install -y python3-dbusmock systemd-libs
           fi
