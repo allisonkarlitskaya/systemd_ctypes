@@ -48,15 +48,8 @@ class Event(sd.event):
 
 
     def add_inotify_fd(self, fd, mask, handler):
-        @sd.event_inotify_handler_t
-        def wrapper(source, _event, userdata):
-            event = _event.contents
-            handler(inotify.Event(event.mask), event.cookie, event.name if event.len else None)
-            return 0
-        source = sd.event_source()
-        source.wrapper = wrapper
-        super().add_inotify_fd(byref(source), fd, mask, source.wrapper, None)
-        return source
+        # HACK: sd_event_add_inotify_fd() got added in 250, which is too new.  Fake it.
+        return self.add_inotify(f'/proc/self/fd/{fd}', mask, handler)
 
 
 # This is all a bit more awkward than it should have to be: systemd's event

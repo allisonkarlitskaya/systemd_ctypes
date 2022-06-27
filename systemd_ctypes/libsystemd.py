@@ -48,7 +48,6 @@ sd.event_inotify_handler_t = CFUNCTYPE(c_int, sd.event_source_p, POINTER(inotify
 
 sd.event.register_methods([
     (instancemethod, negative_errno, 'add_inotify', [POINTER(sd.event_source), utf8, c_uint32, sd.event_inotify_handler_t, c_void_p]),
-    (instancemethod, negative_errno, 'add_inotify_fd', [POINTER(sd.event_source), c_int, c_uint32, sd.event_inotify_handler_t, c_void_p]),
     (instancemethod, negative_errno, 'dispatch', []),
     (instancemethod, negative_errno, 'get_fd', []),
     (instancemethod, negative_errno, 'get_state', []),
