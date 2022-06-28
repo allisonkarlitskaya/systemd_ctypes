@@ -8,7 +8,7 @@ This project aims to build a small wrapper around `libsystemd` based on `ctypes`
  - easy to embed in other projects (eg: in [`zipapp`](https://docs.python.org/3/library/zipapp.html) packages)
  - small code size with little binding-related boilerplate: in many cases, one line per bound function
  - reasonable performance, but not at the cost of readability
- - seemless integration of systmed's event loop with [`asyncio`](https://docs.python.org/3/library/asyncio.html), including [`async`/`await`](https://docs.python.org/3/library/asyncio-task.html).
+ - seemless integration of systemd's event loop with [`asyncio`](https://docs.python.org/3/library/asyncio.html), including [`async`/`await`](https://docs.python.org/3/library/asyncio-task.html).
 
 The initial focus is on the [`sd_event`](https://www.freedesktop.org/software/systemd/man/sd-event.html) and [`sd_bus`](https://www.freedesktop.org/software/systemd/man/sd-bus.html) APIs.
 
