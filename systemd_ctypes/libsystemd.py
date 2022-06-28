@@ -15,10 +15,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from ctypes import *
+from ctypes import Structure, byref, \
+        c_uint8, c_uint16, c_uint32, c_uint64, \
+        c_char, c_int, c_int16, c_int32, c_int64, \
+        c_double, c_void_p, \
+        CFUNCTYPE, POINTER
 
 from .inotify import inotify_event
-from .librarywrapper import *
+from .librarywrapper import librarywrapper, utf8, negative_errno, instancemethod, boolint
 
 
 class sd(librarywrapper):
