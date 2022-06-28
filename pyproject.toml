@@ -12,3 +12,20 @@ dynamic = ["version", "description"]
 
 [project.urls]
 Home = "https://github.com/allisonkarlitskaya/systemd_ctypes/"
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+isolated_build = True
+envlist = site
+
+[testenv]
+deps=
+  pytest
+  python-dbusmock
+commands = python3 -m pytest {posargs}
+
+[testenv:site]
+sitepackages = true
+deps=
+"""
