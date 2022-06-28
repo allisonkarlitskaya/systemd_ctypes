@@ -21,9 +21,13 @@ envlist = site
 
 [testenv]
 deps=
+  coverage
   pytest
   python-dbusmock
-commands = python3 -m pytest {posargs}
+commands =
+  python3 -m coverage erase
+  python3 -m coverage run --source systemd_ctypes --module pytest {posargs}
+  python3 -m coverage report --skip-covered  --fail-under=85 --show-missing
 
 [testenv:site]
 sitepackages = true
