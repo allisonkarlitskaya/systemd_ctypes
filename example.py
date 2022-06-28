@@ -17,7 +17,7 @@
 
 import asyncio
 
-from systemd_ctypes import Bus, Event, EventLoopPolicy, introspection
+from systemd_ctypes import Bus, EventLoopPolicy, introspection
 
 
 def property_changed(message):
@@ -45,6 +45,7 @@ async def main():
 
     slot = system.add_match("interface='org.freedesktop.DBus.Properties'", property_changed)
     await asyncio.sleep(1000)
+    del slot
 
 
 asyncio.set_event_loop_policy(EventLoopPolicy())

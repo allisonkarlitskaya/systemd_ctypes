@@ -22,8 +22,6 @@ import sys
 import tempfile
 import unittest
 
-import logging
-
 from unittest.mock import MagicMock
 
 import systemd_ctypes
@@ -74,7 +72,7 @@ class TestPathWatch(unittest.TestCase):
         self.assertEqual(listener.do_identity_changed.call_args_list[-1][0][1], None)
 
         # create file
-        with open(os.path.join(self.base.name, 'file.txt'), 'w') as f:
+        with open(os.path.join(self.base.name, 'file.txt'), 'w'):
             wait_event()
             listener.do_inotify_event.assert_called_with(Event.CREATE, 0, b'file.txt')
 
@@ -189,14 +187,14 @@ class TestPathWatch(unittest.TestCase):
         listener.reset_mock()
 
         # file in subdir does not get an event
-        with open(os.path.join(listen_root, 'subdir', 'subfile.txt'), 'w') as f:
+        with open(os.path.join(listen_root, 'subdir', 'subfile.txt'), 'w'):
             pass
         # change outside of root directory does not get an event
-        with open(os.path.join(self.base.name, 'unrelated'), 'w') as f:
+        with open(os.path.join(self.base.name, 'unrelated'), 'w'):
             pass
 
         # only this one; this is the canary for "saw events up to this"
-        with open(os.path.join(listen_root, 'file.txt'), 'w') as f:
+        with open(os.path.join(listen_root, 'file.txt'), 'w'):
             wait_event()
             listener.do_inotify_event.assert_called_once_with(Event.CREATE, 0, b'file.txt')
 
@@ -206,5 +204,4 @@ class TestPathWatch(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    # logging.basicConfig(level=logging.DEBUG)
     unittest.main()
