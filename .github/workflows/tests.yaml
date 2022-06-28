@@ -29,7 +29,7 @@ jobs:
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-dbusmock libsystemd0
           elif grep -q platform:el8 /etc/os-release; then
               dnf install -y python3-pip systemd-libs
-              pip3 install python-dbusmock==0.26.1
+              pip3 install python-dbusmock
           else
               dnf install -y python3-dbusmock systemd-libs
           fi
