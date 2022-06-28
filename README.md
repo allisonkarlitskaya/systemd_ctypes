@@ -16,4 +16,4 @@ There's a higher-level [`PathWatch`](systemd_ctypes/pathwatch.py) API to make it
 
 This project originated as a weekend hack to support the efforts to write a portable Python version of [`cockpit-bridge`](https://cockpit-project.org/guide/latest/cockpit-bridge.1.html).
 
-Run tests with `test/run`.
+Run tests with [`tox`](https://tox.wiki/).

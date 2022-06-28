@@ -26,16 +26,16 @@ jobs:
         run: |
           if type apt >/dev/null 2>&1; then
               apt-get update
-              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-dbusmock libsystemd0
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-dbusmock libsystemd0 python3-pytest tox
           elif grep -q platform:el8 /etc/os-release; then
               dnf install -y python3-pip systemd-libs
-              pip3 install python-dbusmock
+              pip3 install python-dbusmock pytest tox
           else
-              dnf install -y python3-dbusmock systemd-libs
+              dnf install -y python3-dbusmock systemd-libs pytest tox
           fi
 
       - name: Run tests
-        run: test/run
+        run: tox -- -v
 
   arch:
     runs-on: ubuntu-latest
@@ -61,5 +61,5 @@ jobs:
           arch: ${{ matrix.arch }}
           install: |
             apt-get update
-            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-dbusmock libsystemd0
-          run: test/run
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-dbusmock libsystemd0 python3-pytest tox
+          run: tox -- -v
