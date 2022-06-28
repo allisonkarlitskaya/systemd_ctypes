@@ -17,9 +17,8 @@
 
 import asyncio
 import selectors
-import sys
 
-from ctypes import byref, addressof, cast
+from ctypes import byref
 
 from . import inotify
 from .libsystemd import sd
