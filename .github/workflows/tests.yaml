@@ -13,6 +13,9 @@ jobs:
           - docker.io/debian:unstable
           - registry.fedoraproject.org/fedora:rawhide
           - quay.io/centos/centos:stream8
+        include:
+          - container: docker.io/ubuntu:rolling
+            pyflakes: true
 
     container:
       image: ${{ matrix.container }}
@@ -26,7 +29,7 @@ jobs:
         run: |
           if type apt >/dev/null 2>&1; then
               apt-get update
-              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-dbusmock libsystemd0 python3-pytest tox
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-dbusmock libsystemd0 python3-pytest tox python3-pyflakes
           elif grep -q platform:el8 /etc/os-release; then
               dnf install -y python3-pip systemd-libs
               pip3 install python-dbusmock pytest tox
@@ -36,6 +39,14 @@ jobs:
 
       - name: Run tests
         run: tox -- -v
+
+      - name: pyflakes
+        run: |
+          if [ -n "${{ matrix.pyflakes }}" ]; then
+              python3 -m pyflakes
+          else
+              echo "Skipping pyflakes test on this OS"
+          fi
 
   arch:
     runs-on: ubuntu-latest
