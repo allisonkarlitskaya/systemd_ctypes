@@ -65,6 +65,27 @@ class TestAPI(dbusmock.DBusTestCase):
 
         return result
 
+    def test_append_arg(self):
+        args = [
+            ('i', 1234),
+            ('s', 'Hello World'),
+            ('a{s(ii)}', {'start': (3, 4), 'end': (6, 7)}),
+        ]
+        signature = ''.join(typestring for typestring, value in args)
+        values = tuple(value for typestring, value in args)
+
+        # Construct it one argument at a time
+        message1 = self.bus_user.message_new_method_call(*TEST_ADDR, 'Do')
+        for typestring, value in args:
+            message1.append_arg(typestring, value)
+        message1.seal(0, 0)
+        self.assertEqual(message1.get_body(), values)
+
+        # Construct it in one go
+        message2 = self.bus_user.message_new_method_call(*TEST_ADDR, 'Do', signature, *values)
+        message2.seal(0, 0)
+        self.assertEqual(message2.get_body(), values)
+
     def test_noarg_noret_sync(self):
         self.add_method('', 'Do', '', '', '')
         result = self.bus_user.call_method(*TEST_ADDR, 'Do')
