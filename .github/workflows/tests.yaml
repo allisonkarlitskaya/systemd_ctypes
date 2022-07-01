@@ -39,7 +39,8 @@ jobs:
 
   arch:
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -57,6 +58,7 @@ jobs:
       - name: Run test
         uses: uraimo/run-on-arch-action@v2
         with:
+          githubToken: ${{ github.token }}
           distro: ubuntu_latest
           arch: ${{ matrix.arch }}
           install: |
