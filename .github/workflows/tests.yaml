@@ -75,3 +75,29 @@ jobs:
                 python3-dbusmock \
                 tox
           run: tox -e py3 -- -v
+
+  pyver:
+    runs-on: ubuntu-latest
+    permissions: {}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.6', '3.7', '3.8', '3.9', '3.10']
+    timeout-minutes: 10
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system dependencies
+        run: sudo apt install libdbus-1-dev
+
+      - name: Install python dependencies
+        run: pip install --user pip tox
+
+      - name: Clone repository
+        uses: actions/checkout@v3
+
+      - name: Run test
+        run: tox -e py"$(echo ${{ matrix.python-version }} | tr -d .)" -- -v
