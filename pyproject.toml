@@ -23,9 +23,11 @@ envlist = site
 sitepackages = true
 deps=
   coverage
+  pyflakes
   pytest
   python-dbusmock
 commands =
+  python3 -m pyflakes systemd_ctypes
   python3 -m coverage erase
   python3 -m coverage run --source systemd_ctypes --module pytest {posargs}
   python3 -m coverage report --skip-covered  --fail-under=85 --show-missing
