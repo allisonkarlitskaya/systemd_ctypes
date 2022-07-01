@@ -28,30 +28,23 @@ jobs:
               apt-get update
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                   libsystemd0 \
-                  python3-coverage \
                   python3-dbusmock \
-                  python3-pytest \
                   tox
           elif grep -q platform:el8 /etc/os-release; then
               dnf install -y \
                   python3-pip \
                   systemd-libs
               pip3 install \
-                  coverage \
-                  pytest \
-                  python-dbusmock \
                   tox
           else
               dnf install -y \
-                  pytest \
-                  python3-coverage \
                   python3-dbusmock \
                   systemd-libs \
                   tox
           fi
 
       - name: Run tests
-        run: tox -- -v
+        run: tox -e py3 -- -v
 
   arch:
     runs-on: ubuntu-latest
@@ -79,8 +72,6 @@ jobs:
             apt-get update
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                 libsystemd0 \
-                python3-coverage \
                 python3-dbusmock \
-                python3-pytest \
                 tox
-          run: tox -- -v
+          run: tox -e py3 -- -v

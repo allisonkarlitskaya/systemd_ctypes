@@ -20,6 +20,7 @@ isolated_build = True
 envlist = site
 
 [testenv]
+sitepackages = true
 deps=
   coverage
   pytest
@@ -30,6 +31,5 @@ commands =
   python3 -m coverage report --skip-covered  --fail-under=85 --show-missing
 
 [testenv:site]
-sitepackages = true
 deps=
 """
