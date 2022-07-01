@@ -115,6 +115,7 @@ class TestPathWatch(unittest.TestCase):
 
     # on systemd 239 on RHEL 8: Assertion 'sz <= d->buffer_filled' failed at ../src/libsystemd/sd-event/sd-event.c:3185, function event_inotify_data_drop().
     @unittest.skipIf('PLATFORM_ID="platform:el8"' in os_release, 'crashes on RHEL 8 systemd')
+    @unittest.skipIf('Focal Fossa' in os_release, 'crashes on Ubuntu 20.04')
     def testRootDirectoryIdentity(self):
         listener = MagicMock()
         listen_root = os.path.join(self.base.name, 'root')
