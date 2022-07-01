@@ -24,7 +24,7 @@ from ctypes import c_char, byref
 
 from .librarywrapper import utf8
 from .libsystemd import sd
-from .signature import parse_signature
+from .signature import parse_signature, parse_typestring
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +52,11 @@ class BusMessage(sd.bus_message):
             self.append_with_info(child_info, child)
         self.close_container()
 
-    def append(self, typestring, *args):
-        infos = parse_signature(typestring)
+    def append_arg(self, typestring, arg):
+        self.append_with_info(parse_typestring(typestring), arg)
+
+    def append(self, signature, *args):
+        infos = parse_signature(signature)
         assert len(infos) == len(args)
         for info, arg in zip(infos, args):
             self.append_with_info(info, arg)
