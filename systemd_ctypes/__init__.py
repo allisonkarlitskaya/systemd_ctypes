@@ -24,10 +24,10 @@ from .event import Event, EventLoopPolicy
 from .pathwatch import PathWatch
 
 __all__ = [
-        Bus,
-        BusError,
-        BusMessage,
-        Event,
-        EventLoopPolicy,
-        PathWatch,
+        "Bus",
+        "BusError",
+        "BusMessage",
+        "Event",
+        "EventLoopPolicy",
+        "PathWatch",
 ]
