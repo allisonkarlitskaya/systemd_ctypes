@@ -32,7 +32,7 @@ def parse_property(prop):
 
 
 def parse_signal(signal):
-    return {"in": [tag.attrib['type'] for tag in signal]}
+    return {"in": [tag.attrib['type'] for tag in signal.findall("arg")]}
 
 
 def parse_interface(interface):
