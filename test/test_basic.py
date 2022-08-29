@@ -22,6 +22,7 @@ import sys
 
 import dbusmock
 import systemd_ctypes
+from systemd_ctypes import introspection
 
 
 TEST_ADDR = ('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main')
@@ -209,6 +210,17 @@ class TestAPI(dbusmock.DBusTestCase):
         self.add_method('', 'Boom', '', '', 'raise dbus.exceptions.DBusException("no good", name="com.example.Error.NoGood")')
         with self.assertRaisesRegex(systemd_ctypes.BusError, 'no good'):
             self.bus_user.call_method(*TEST_ADDR, 'Boom')
+
+    def test_introspect(self):
+        self.add_method('', 'Do', 'saiv', 'i', 'ret = 42')
+        xml, = self.bus_user.call_method(TEST_ADDR[0], '/', 'org.freedesktop.DBus.Introspectable', 'Introspect')
+        parsed = introspection.parse_xml(xml)
+        expected = {
+                'methods': {'Do': {'in': ['s', 'ai', 'v'], 'out': ['i']}},
+                'properties': {},
+                'signals': {}
+        }
+        self.assertEqual(parsed['org.freedesktop.Test.Main'], expected)
 
 
 if __name__ == '__main__':
