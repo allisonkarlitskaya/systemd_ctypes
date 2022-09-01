@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 
 def parse_method(method):
     return {
-        "in": [tag.attrib['type'] for tag in method.findall("arg[@direction!='out']")],
+        "in": [tag.attrib['type'] for tag in method.findall("arg") if tag.get('direction', 'in') == 'in'],
         "out": [tag.attrib['type'] for tag in method.findall("arg[@direction='out']")]
     }
 
