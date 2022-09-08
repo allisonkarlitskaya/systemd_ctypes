@@ -142,17 +142,21 @@ class Bus(sd.bus):
     _default_user = None
 
     @staticmethod
-    def default_system():
+    def default_system(attach_event=False):
         if not Bus._default_system:
             Bus._default_system = Bus()
             sd.bus.default_system(Bus._default_system)
+            if attach_event:
+                Bus._default_system.attach_event(None, 0)
         return Bus._default_system
 
     @staticmethod
-    def default_user():
+    def default_user(attach_event=False):
         if not Bus._default_user:
             Bus._default_user = Bus()
             sd.bus.default_user(Bus._default_user)
+            if attach_event:
+                Bus._default_user.attach_event(None, 0)
         return Bus._default_user
 
     def message_new_method_call(self, destination, path, interface, member, types='', *args):
