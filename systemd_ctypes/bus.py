@@ -23,6 +23,7 @@ import socket
 import sys
 from ctypes import c_char, byref
 
+from . import introspection
 from .librarywrapper import utf8
 from .libsystemd import sd
 from .signature import parse_signature, parse_typestring
@@ -30,6 +31,9 @@ from .signature import parse_signature, parse_typestring
 logger = logging.getLogger(__name__)
 
 class BusMessage(sd.bus_message):
+    def get_bus(self):
+        return Bus.ref(super().get_bus())
+
     def new_method_return(self):
         reply = BusMessage()
         super().new_method_return(reply)
@@ -217,3 +221,134 @@ class Bus(sd.bus):
         slot = Slot(handler)
         super().add_match(byref(slot), rule, slot.callback, slot.userdata)
         return slot
+
+    def add_object(self, path, obj):
+        slot = Slot(obj.message_received)
+        super().add_object(byref(slot), path, slot.callback, slot.userdata)
+        return slot
+
+
+class BaseObject:
+    def message_received(self, message):
+        try:
+            reply = message.new_method_return()
+            handled = self.handle_method_call(message, reply)
+        except BusError:
+            assert False  # needs proper exception handling
+
+        if handled:
+            # message_send() is not available in RHEL 8
+            message.get_bus().send(reply, None)
+            return 1
+        else:
+            return 0
+
+    def handle_method_call(self, message, reply):
+        raise NotImplementedError
+
+class Object(BaseObject):
+    @classmethod
+    def prepare(cls, iface):
+        cls._dbus_interface = iface
+        cls._dbus_members = {'properties': {}, 'methods': {}}
+        for key, value in cls.__dict__.items():
+            if not key.startswith('_') and hasattr(value, '_dbus_info'):
+                category, member, info = value._dbus_info
+                if member is None:
+                    member = ''.join(part.title() for part in key.split('_'))
+                cls._dbus_members[category][member] = value, info
+        cls._dbus_xml = introspection.to_xml({
+            cls._dbus_interface: {
+                'methods': {
+                    name: {
+                        'in': list(in_args),
+                        'out': list(out_args),
+                    } for name, (_, (out_args, in_args)) in cls._dbus_members['methods'].items()
+                },
+                'properties': {
+                    name: {
+                        'flags': 'r',
+                        'type': dbus_type,
+                    } for name, (_, (dbus_type,)) in cls._dbus_members['properties'].items()
+                },
+                'signals': {
+                },
+            }
+        })
+        return cls
+
+    @staticmethod
+    def _add_info(category, member, *args):
+        def wrapper(obj):
+            obj._dbus_info = category, member, args
+            return obj
+        return wrapper
+
+    @staticmethod
+    def interface(name):
+        return lambda cls: cls.prepare(name)
+
+    @staticmethod
+    def property(dbus_type, member=None):
+        return Object._add_info('properties', member, dbus_type)
+
+    @staticmethod
+    def method(out_types=(), in_types=(), member=None):
+        return Object._add_info('methods', member, out_types, in_types)
+
+    def append_property(self, reply, info):
+        func, (dbus_type,) = info
+        reply.open_container(ord('v'), dbus_type)
+        reply.append_arg(dbus_type, func(self))
+        reply.close_container()
+
+    def handle_method_call(self, message, reply):
+        interface = message.get_interface(message)
+        method = message.get_member()
+
+        if interface == 'org.freedesktop.DBus.Introspectable':
+            if method == 'Introspect' and message.has_signature(''):
+                reply.append_arg('s', self._dbus_xml)
+                return True
+
+        elif interface == 'org.freedesktop.DBus.Properties':
+            if method == 'GetAll' and message.has_signature('s'):
+                iface, = message.get_body()
+                if iface == self._dbus_interface:
+                    reply.open_container(ord('a'), '{sv}')
+                    for name, info in self._dbus_members['properties'].items():
+                        reply.open_container(ord('e'), 'sv')
+                        reply.append_arg('s', name)
+                        self.append_property(reply, info)
+                        reply.close_container()
+                    reply.close_container()
+                    return True
+
+            elif method == 'Get' and message.has_signature('ss'):
+                iface, name = message.get_body()
+                if iface == self._dbus_interface:
+                    info = self._dbus_members['properties'].get(name)
+                    if info:
+                        self.append_property(reply, info)
+                        return True
+
+        elif interface == self._dbus_interface:
+            info = self._dbus_members['methods'].get(message.get_member())
+            if info:
+                handler, (out_types, in_types) = info
+                if message.has_signature(''.join(in_types)):
+                    result = handler(self, *message.get_body())
+
+                    # In the general case, a function returns an n-tuple, but
+                    # we special-case n=0 and n=1 to be more human-friendly.
+                    if len(out_types) == 0:
+                        assert result is None
+                        result = ()
+                    elif len(out_types) == 1:
+                        result = (result,)
+
+                    for out_type, arg in zip(out_types, result):
+                        reply.append_arg(out_types, arg)
+                    return True
+
+        return False
