@@ -15,6 +15,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import sys
+
 from ctypes import Structure, byref, \
         c_uint8, c_uint16, c_uint32, c_uint64, \
         c_char, c_int, c_int16, c_int32, c_int64, \
@@ -36,6 +38,16 @@ class sd(librarywrapper):
             ("message", utf8),
             ("_need_free", c_int)
         ]
+
+    class id128(Structure):
+        # HACK: Pass-by-value of array-containing-structs is broken on Python
+        # 3.6. See https://bugs.python.org/issue22273
+        _fields_ = [
+            ("bytes", c_uint8 * 16)
+        ] if sys.version_info >= (3, 7, 0) else [
+            ("one", c_uint64), ("two", c_uint64)
+        ]
+
 
 sd.dlopen('libsystemd.so.0')
 
