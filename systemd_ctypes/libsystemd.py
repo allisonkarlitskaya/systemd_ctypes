@@ -130,6 +130,5 @@ sd.bus.register_methods([
     (instancemethod, negative_errno, 'message_new', [POINTER(sd.bus_message_p), c_uint8]),
     (instancemethod, negative_errno, 'message_new_method_call', [POINTER(sd.bus_message_p), utf8, utf8, utf8, utf8]),
     (instancemethod, negative_errno, 'new', [POINTER(sd.bus_p)]),
-    (instancemethod, negative_errno, 'process', [c_uint64]),
     (instancemethod, negative_errno, 'wait', [c_uint64]),
 ])
