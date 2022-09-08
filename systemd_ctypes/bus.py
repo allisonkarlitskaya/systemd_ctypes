@@ -19,6 +19,7 @@ import asyncio
 import base64
 import itertools
 import logging
+import socket
 import sys
 from ctypes import c_char, byref
 
@@ -158,6 +159,25 @@ class Bus(sd.bus):
             if attach_event:
                 Bus._default_user.attach_event(None, 0)
         return Bus._default_user
+
+    @staticmethod
+    def from_fd(fd, server_id=None, attach_event=False):
+        bus = Bus()
+        sd.bus.new(bus)
+        if server_id is not None:
+            bus.set_server(True, server_id)
+        bus.set_fd(fd, fd)
+        bus.start()
+        if attach_event:
+            bus.attach_event(None, 0)
+        return bus
+
+    @staticmethod
+    def socketpair(attach_event=False):
+        client_socket, server_socket = socket.socketpair()
+        client = Bus.from_fd(client_socket.detach(), attach_event=attach_event)
+        server = Bus.from_fd(server_socket.detach(), sd.id128(), attach_event=attach_event)
+        return client, server
 
     def message_new_method_call(self, destination, path, interface, member, types='', *args):
         message = BusMessage()
