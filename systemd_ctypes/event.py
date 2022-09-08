@@ -17,6 +17,7 @@
 
 import asyncio
 import selectors
+import sys
 
 from ctypes import byref
 
@@ -79,3 +80,12 @@ class Selector(selectors.DefaultSelector):
 class EventLoopPolicy(asyncio.DefaultEventLoopPolicy):
     def new_event_loop(self):
         return asyncio.SelectorEventLoop(Selector())
+
+def run_async(main):
+    asyncio.set_event_loop_policy(EventLoopPolicy())
+
+    if sys.version_info >= (3, 7, 0):
+        asyncio.run(main)
+    else:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(main)

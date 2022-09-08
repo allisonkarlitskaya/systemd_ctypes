@@ -18,7 +18,6 @@
 import asyncio
 import errno
 import os
-import sys
 import tempfile
 import unittest
 
@@ -38,8 +37,6 @@ class TestPathWatch(unittest.TestCase):
         self.addCleanup(self.base.cleanup)
 
     def async_wait_cond(self, cond):
-        asyncio.set_event_loop_policy(systemd_ctypes.EventLoopPolicy())
-
         async def _call():
             for retry in range(50):
                 if cond():
@@ -48,11 +45,7 @@ class TestPathWatch(unittest.TestCase):
             else:
                 self.fail('Timed out waiting for condition')
 
-        if sys.version_info >= (3, 7, 0):
-            asyncio.run(_call())
-        else:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(_call())
+        systemd_ctypes.run_async(_call())
 
     def testSingleDirectory(self):
         listener = MagicMock()
