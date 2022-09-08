@@ -29,6 +29,11 @@ from .signature import parse_signature, parse_typestring
 logger = logging.getLogger(__name__)
 
 class BusMessage(sd.bus_message):
+    def new_method_return(self):
+        reply = BusMessage()
+        super().new_method_return(reply)
+        return reply
+
     def append_with_info(self, typeinfo, value):
         category, contents, child_info = typeinfo
 
