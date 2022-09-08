@@ -119,8 +119,6 @@ sd.bus_message.register_methods([
 ])
 
 sd.bus.register_methods([
-    (staticmethod, negative_errno, 'default_system', [POINTER(sd.bus_p)]),
-    (staticmethod, negative_errno, 'default_user', [POINTER(sd.bus_p)]),
     (instancemethod, negative_errno, 'add_match', [POINTER(sd.bus_slot), utf8, sd.bus_message_handler_t, c_void_p]),
     (instancemethod, negative_errno, 'add_match_async', [POINTER(sd.bus_slot), utf8, sd.bus_message_handler_t, sd.bus_message_handler_t, c_void_p]),
     (instancemethod, negative_errno, 'attach_event', [sd.event_p, c_int]),
@@ -130,5 +128,10 @@ sd.bus.register_methods([
     (instancemethod, negative_errno, 'message_new', [POINTER(sd.bus_message_p), c_uint8]),
     (instancemethod, negative_errno, 'message_new_method_call', [POINTER(sd.bus_message_p), utf8, utf8, utf8, utf8]),
     (instancemethod, negative_errno, 'new', [POINTER(sd.bus_p)]),
+    (instancemethod, negative_errno, 'set_fd', [c_int, c_int]),
+    (instancemethod, negative_errno, 'set_server', [boolint, sd.id128]),
+    (instancemethod, negative_errno, 'start', []),
     (instancemethod, negative_errno, 'wait', [c_uint64]),
+    (staticmethod, negative_errno, 'default_system', [POINTER(sd.bus_p)]),
+    (staticmethod, negative_errno, 'default_user', [POINTER(sd.bus_p)]),
 ])
