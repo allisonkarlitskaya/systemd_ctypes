@@ -49,9 +49,17 @@ class BusMessage(sd.bus_message):
         else:
             return None
 
-    def new_method_return(self):
+    def new_method_return(self, signature='', *args):
+        """Creates a new method return message as a reply to this message.
+
+        :signature: The signature of the result, as a string.
+        :args: The values to send, conforming to the signature string.
+
+        :returns: the reply message
+        """
         reply = BusMessage()
         super().new_method_return(reply)
+        reply.append(signature, *args)
         return reply
 
     def new_method_error(self, error):
@@ -124,6 +132,61 @@ class BusMessage(sd.bus_message):
     def get_body(self):
         self.rewind(True)
         return tuple(self.yield_values())
+
+    def send(self):
+        """Sends a message on the bus that it was created for.
+
+        :returns: True
+        """
+        self.get_bus().send(self, None)
+        return True
+
+    def reply_method_error(self, error):
+        """Sends an error as a reply to a method call message.
+
+        :error: A BusError
+
+        :returns: True
+        """
+        return self.new_method_error(error).send()
+
+    def reply_method_return(self, signature='', *args):
+        """Sends a return value as a reply to a method call message.
+
+        :signature: The signature of the result, as a string.
+        :args: The values to send, conforming to the signature string.
+
+        :returns: True
+        """
+        return self.new_method_return(signature, *args).send()
+
+    def reply_method_function_return_value(self, out_types, return_value):
+        """Sends the result of a function call as a reply to a method call message.
+
+        This call does a bit of magic: it adapts from the usual Python return
+        value conventions (where the return value is ``None``, a single value,
+        or a tuple) to the normal D-Bus return value conventions (where the
+        result is always a tuple).
+
+        :out_types: The types of the return values, as an iterable.
+        :return_value: The return value of a Python function call.
+
+        :returns: True
+        """
+        reply = self.new_method_return()
+        # In the general case, a function returns an n-tuple, but...
+        if len(out_types) == 0:
+            # Functions with no return value return None.
+            assert return_value is None
+        elif len(out_types) == 1:
+            # Functions with a single return value return that value.
+            reply.append_arg(out_types[0], return_value)
+        else:
+            # (general case) n return values are handled as an n-tuple.
+            assert len(out_types) == len(return_value)
+            for out_type, value in zip(out_types, return_value):
+                reply.append_arg(out_type, value)
+        return reply.send()
 
 
 class Slot(sd.bus_slot):
@@ -314,19 +377,19 @@ class Object(BaseObject):
         reply.append_arg(dbus_type, func(self))
         reply.close_container()
 
-    def handle_method_call(self, message, reply):
+    def message_received(self, message):
         interface = message.get_interface(message)
         method = message.get_member()
 
         if interface == 'org.freedesktop.DBus.Introspectable':
             if method == 'Introspect' and message.has_signature(''):
-                reply.append_arg('s', self._dbus_xml)
-                return True
+                return message.reply_method_return('s', self._dbus_xml)
 
         elif interface == 'org.freedesktop.DBus.Properties':
             if method == 'GetAll' and message.has_signature('s'):
                 iface, = message.get_body()
                 if iface == self._dbus_interface:
+                    reply = message.new_method_return()
                     reply.open_container(ord('a'), '{sv}')
                     for name, info in self._dbus_members['properties'].items():
                         reply.open_container(ord('e'), 'sv')
@@ -334,33 +397,27 @@ class Object(BaseObject):
                         self.append_property(reply, info)
                         reply.close_container()
                     reply.close_container()
-                    return True
+                    return reply.send()
 
             elif method == 'Get' and message.has_signature('ss'):
                 iface, name = message.get_body()
                 if iface == self._dbus_interface:
                     info = self._dbus_members['properties'].get(name)
                     if info:
+                        reply = message.new_method_return()
                         self.append_property(reply, info)
-                        return True
+                        return reply.send()
 
         elif interface == self._dbus_interface:
             info = self._dbus_members['methods'].get(message.get_member())
             if info:
                 handler, (out_types, in_types) = info
                 if message.has_signature(''.join(in_types)):
-                    result = handler(self, *message.get_body())
+                    try:
+                        result = handler(self, *message.get_body())
+                    except BusError as exc:
+                        return message.reply_method_error(exc)
 
-                    # In the general case, a function returns an n-tuple, but
-                    # we special-case n=0 and n=1 to be more human-friendly.
-                    if len(out_types) == 0:
-                        assert result is None
-                        result = ()
-                    elif len(out_types) == 1:
-                        result = (result,)
-
-                    for out_type, arg in zip(out_types, result):
-                        reply.append_arg(out_types, arg)
-                    return True
+                    return message.reply_method_function_return_value(out_types, result)
 
         return False
