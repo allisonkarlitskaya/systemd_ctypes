@@ -1,6 +1,6 @@
 import unittest
 
-from systemd_ctypes import bus, introspection, run_async
+from systemd_ctypes import bus, introspection, run_async, BusError
 
 
 class TestPeerToPeer(unittest.TestCase):
@@ -15,7 +15,10 @@ class TestPeerToPeer(unittest.TestCase):
 
             @bus.Object.method('i', 'ii')
             def divide(self, top, bottom):
-                return top // bottom
+                try:
+                    return top // bottom
+                except ZeroDivisionError as exc:
+                    raise BusError('cockpit.Error.ZeroDivisionError', 'Divide by zero') from exc
 
         self.test_object = self.server.add_object('/test', TestObject())
 
@@ -56,6 +59,11 @@ class TestPeerToPeer(unittest.TestCase):
             self.assertEqual(reply, 42)
         run_async(test())
 
+    def test_method_throws(self):
+        async def test():
+            with self.assertRaisesRegex(BusError, 'cockpit.Error.ZeroDivisionError: Divide by zero'):
+                await self.client.call_method_async(None, '/test', 'cockpit.Test', 'Divide', 'ii', 1554, 0)
+        run_async(test())
 
 if __name__ == '__main__':
     unittest.main()
