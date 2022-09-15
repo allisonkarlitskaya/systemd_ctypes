@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 import sys
 
 from ctypes import Structure, byref, \
@@ -31,13 +32,25 @@ class sd(librarywrapper):
     namespace = 'sd'
 
     class bus_error(Structure):
-        # This is ABI, so we are safe to assume it doesn't change
-        # unfortunately, we lack anything like sd_bus_error_new()
+        # This is ABI, so we are safe to assume it doesn't change.
+        # Unfortunately, we lack anything like sd_bus_error_new().
         _fields_ = [
             ("name", utf8),
             ("message", utf8),
             ("_need_free", c_int)
         ]
+
+        def get(self):
+            return self.name.value, self.message.value
+
+        def set(self, name, message):
+            result = sd._library.sd_bus_error_set(byref(self), name, message)
+            if result < 0:
+                raise OSError(-result, f'sd_bus_error_set: {os.strerror(-result)}')
+
+        def __del__(self):
+            if self._b_needsfree_:
+                sd._library.sd_bus_error_free(byref(self))
 
     class id128(Structure):
         # HACK: Pass-by-value of array-containing-structs is broken on Python
@@ -104,6 +117,7 @@ sd.bus_message.register_methods([
     (instancemethod, negative_errno, 'exit_container', []),
     (instancemethod, negative_errno, 'has_signature', [utf8]),
     (instancemethod, negative_errno, 'is_method_error', [utf8]),
+    (instancemethod, negative_errno, 'new_method_errorf', [POINTER(sd.bus_message_p), utf8, utf8, utf8]),
     (instancemethod, negative_errno, 'new_method_return', [POINTER(sd.bus_message_p)]),
     (instancemethod, negative_errno, 'open_container', [c_char, utf8]),
     (instancemethod, negative_errno, 'peek_type', [POINTER(c_char), POINTER(utf8)]),
