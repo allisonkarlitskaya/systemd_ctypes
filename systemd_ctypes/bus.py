@@ -30,13 +30,33 @@ from .signature import parse_signature, parse_typestring
 
 logger = logging.getLogger(__name__)
 
+
+class BusError(Exception):
+    def __init__(self, name, message):
+        super().__init__(f'{name}: {message}')
+        self.name = name
+        self.message = message
+
+
 class BusMessage(sd.bus_message):
     def get_bus(self):
         return Bus.ref(super().get_bus())
 
+    def get_error(self):
+        error = super().get_error()
+        if error:
+            return BusError(*error.contents.get())
+        else:
+            return None
+
     def new_method_return(self):
         reply = BusMessage()
         super().new_method_return(reply)
+        return reply
+
+    def new_method_error(self, error):
+        reply = BusMessage()
+        super().new_method_errorf(reply, error.name, "%s", error.message)
         return reply
 
     def append_with_info(self, typeinfo, value):
@@ -113,14 +133,6 @@ class BusMessage(sd.bus_message):
         return tuple(self.yield_values())
 
 
-class BusError(Exception):
-    def __init__(self, code, description, message=None):
-        super().__init__(description)
-        self.code = code
-        self.description = description
-        self.message = message
-
-
 class Slot(sd.bus_slot):
     def __init__(self, callback=None):
         self.__func__ = callback
@@ -141,9 +153,9 @@ class PendingCall(Slot):
         self.future = get_loop().create_future()
 
     def done(self, message):
-        if message.is_method_error(None):
-            error = message.get_error()[0]
-            self.future.set_exception(BusError(error.name.value, error.message.value, message))
+        error = message.get_error()
+        if error is not None:
+            self.future.set_exception(error)
         else:
             self.future.set_result(message)
         return True
@@ -203,7 +215,7 @@ class Bus(sd.bus):
             super().call(message, timeout or 0, byref(error), reply)
             return reply
         except OSError as exc:
-            raise BusError(error.name.value, error.message.value, reply) from exc
+            raise BusError(*error.get()) from exc
 
     def call_method(self, destination, path, interface, member, types='', *args, timeout=None):
         logger.debug('Doing sync method call %s %s %s %s %s %s',
