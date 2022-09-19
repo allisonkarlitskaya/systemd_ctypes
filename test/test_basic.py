@@ -70,7 +70,11 @@ class TestAPI(dbusmock.DBusTestCase):
         args = [
             ('i', 1234),
             ('s', 'Hello World'),
+            ('v', { 't': 's', 'v': 'Hi!' } ),
+            ('v', { 't': 'i', 'v': 5678 } ),
+            ('ai', [ 1, 2, 3, 5 ]),
             ('a{s(ii)}', {'start': (3, 4), 'end': (6, 7)}),
+            ('a{sv}', {'one': { 't': 's', 'v': "Hello" }, 'two': { 't': 't', 'v': 1234567890 } }),
         ]
         signature = ''.join(typestring for typestring, value in args)
         values = tuple(value for typestring, value in args)
