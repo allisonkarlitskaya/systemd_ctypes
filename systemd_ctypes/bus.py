@@ -53,7 +53,14 @@ class BusMessage(sd.bus_message):
         if category == 'a' and contents == 'y' and isinstance(value, str):
             value = base64.b64decode(value)
 
-        # Containers
+        # Variants
+        if category == 'v':
+            self.open_container(ord(category), value['t'])
+            self.append_with_info(parse_typestring(value['t']), value['v'])
+            self.close_container()
+            return
+
+        # Other containers
         child_info_iter = itertools.repeat(child_info) if category == 'a' else child_info
         value_iter = value.items() if child_info[0] == 'e' else value
 
