@@ -25,7 +25,7 @@ from ctypes import c_char, byref
 
 from . import introspection
 from .librarywrapper import utf8
-from .libsystemd import sd
+from .libsystemd import sd, InvalidArgsError
 from .signature import parse_signature, parse_typestring
 
 logger = logging.getLogger(__name__)
@@ -51,10 +51,18 @@ class BusMessage(sd.bus_message):
 
         # Support base64 encoding of binary blobs
         if category == 'a' and contents == 'y' and isinstance(value, str):
-            value = base64.b64decode(value)
+            try:
+                value = base64.b64decode(value)
+            except Exception as error:
+                raise InvalidArgsError("Invalid base64 in argument")
 
         # Variants
         if category == 'v':
+            try:
+                t = value['t']
+                v = value['v']
+            except Exception:
+                raise InvalidArgsError("Unexpected type for a variant")
             self.open_container(ord(category), value['t'])
             self.append_with_info(parse_typestring(value['t']), value['v'])
             self.close_container()

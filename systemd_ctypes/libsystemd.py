@@ -73,10 +73,29 @@ sd.event.register_methods([
     (staticmethod, negative_errno, 'default', [POINTER(sd.event_p)]),
 ])
 
+class InvalidArgsError(Exception):
+    pass
+
+class utf8_object_path(utf8):
+    def __init__(self, value=None):
+        super().__init__(value)
+        if self.value is not None:
+            # TODO - check all the requirements
+            if len(self.value) == 0 or self.value[0] != "/":
+                raise InvalidArgsError(f"Invalid object path '{self.value}'")
+
+class utf8_signature(utf8):
+    def __init__(self, value=None):
+        super().__init__(value)
+        if self.value is not None:
+            # TODO - check all the requirements
+            if " " in self.value:
+                raise InvalidArgsError(f"Invalid signature '{self.value}'")
+
 BASIC_TYPE_MAP = {
     'y': c_uint8, 'b': boolint,
     'n': c_int16, 'q': c_uint16, 'i': c_int32, 'u': c_uint32, 'x': c_int64, 't': c_uint64,
-    'd': c_double, 's': utf8, 'o': utf8, 'g': utf8,
+    'd': c_double, 's': utf8, 'o': utf8_object_path, 'g': utf8_signature,
 }
 
 # Typesafe wrapper for functions that require the third argument to correspond
@@ -84,7 +103,12 @@ BASIC_TYPE_MAP = {
 # Raises KeyError in case the type character is not supported.
 def basic_type_in(func):
     def wrapper(self, char, value):
-        box = BASIC_TYPE_MAP[char](value)
+        try:
+            box = BASIC_TYPE_MAP[char](value)
+        except TypeError:
+            box = None
+        if box is None or box.value != value:
+            raise InvalidArgsError(f"{value} does not fit in a '{char}'")
         func(self, ord(char), box if isinstance(box, utf8) else byref(box))
     return wrapper
 def basic_type_out(func):

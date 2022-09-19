@@ -22,6 +22,7 @@ __version__ = "0"
 from .bus import Bus, BusError, BusMessage
 from .event import Event, EventLoopPolicy, run_async
 from .pathwatch import PathWatch
+from .libsystemd import InvalidArgsError
 
 __all__ = [
         "Bus",
@@ -30,5 +31,6 @@ __all__ = [
         "Event",
         "EventLoopPolicy",
         "PathWatch",
+        "InvalidArgsError",
         "run_async",
 ]
