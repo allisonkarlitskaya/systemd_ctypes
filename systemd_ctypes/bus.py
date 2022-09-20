@@ -17,6 +17,7 @@
 
 import asyncio
 import base64
+import functools
 import itertools
 import logging
 import socket
@@ -166,6 +167,12 @@ class BusMessage(sd.bus_message):
         """
         return self.new_method_return(signature, *args).send()
 
+    def _coroutine_task_complete(self, out_types, task):
+        try:
+            self.reply_method_return(out_types, task.result())
+        except BusError as exc:
+            return self.reply_method_error(exc)
+
     def reply_method_function_return_value(self, out_types, return_value):
         """Sends the result of a function call as a reply to a method call message.
 
@@ -174,11 +181,20 @@ class BusMessage(sd.bus_message):
         or a tuple) to the normal D-Bus return value conventions (where the
         result is always a tuple).
 
+        Additionally, if the value is found to be a coroutine, a task is
+        created to run the coroutine to completion and return the result
+        (including exception handling).
+
         :out_types: The types of the return values, as an iterable.
         :return_value: The return value of a Python function call.
 
         :returns: True
         """
+        if asyncio.coroutines.iscoroutine(return_value):
+            task = asyncio.create_task(return_value)
+            task.add_done_callback(functools.partial(self._coroutine_task_complete, out_types))
+            return True
+
         reply = self.new_method_return()
         # In the general case, a function returns an n-tuple, but...
         if len(out_types) == 0:
