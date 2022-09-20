@@ -84,8 +84,23 @@ class EventLoopPolicy(asyncio.DefaultEventLoopPolicy):
 def run_async(main):
     asyncio.set_event_loop_policy(EventLoopPolicy())
 
-    if sys.version_info >= (3, 7, 0):
-        asyncio.run(main)
-    else:
+    polyfill = sys.version_info < (3, 7, 0) and not hasattr(asyncio, 'run')
+    if polyfill:
+        # Polyfills for Python 3.6:
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(main)
+
+        assert not hasattr(asyncio, 'get_running_loop')
+        asyncio.get_running_loop = lambda: loop
+
+        assert not hasattr(asyncio, 'create_task')
+        asyncio.create_task = loop.create_task
+
+        assert not hasattr(asyncio, 'run')
+        asyncio.run = loop.run_until_complete
+
+        asyncio._systemd_ctypes_polyfills = True
+
+    asyncio.run(main)
+
+    if polyfill:
+        del asyncio.create_task, asyncio.get_running_loop, asyncio.run

@@ -15,10 +15,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import asyncio
 import tempfile
 import unittest
-import sys
 
 import dbusmock
 import systemd_ctypes
@@ -32,8 +30,7 @@ class TestAPI(dbusmock.DBusTestCase):
     @classmethod
     def setUpClass(cls):
         cls.start_session_bus()
-        cls.bus_user = systemd_ctypes.Bus.default_user()
-        cls.bus_user.attach_event(None, 0)
+        cls.bus_user = systemd_ctypes.Bus.default_user(attach_event=True)
 
     def setUp(self):
         self.mock_log = tempfile.NamedTemporaryFile()
@@ -51,18 +48,13 @@ class TestAPI(dbusmock.DBusTestCase):
         self.assertEqual(result, ())
 
     def async_call(self, message):
-        asyncio.set_event_loop_policy(systemd_ctypes.EventLoopPolicy())
-
         result = None
         async def _call():
             nonlocal result
             result = await self.bus_user.call_async(message)
 
-        if sys.version_info >= (3, 7, 0):
-            asyncio.run(_call())
-        else:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(_call())
+
+        systemd_ctypes.event.run_async(_call())
 
         return result
 
