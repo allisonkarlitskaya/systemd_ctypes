@@ -20,7 +20,6 @@ import base64
 import itertools
 import logging
 import socket
-import sys
 from ctypes import c_char, byref
 
 from . import introspection
@@ -211,9 +210,7 @@ class Slot(sd.bus_slot):
 class PendingCall(Slot):
     def __init__(self):
         super().__init__(self.done)
-
-        get_loop = asyncio.get_running_loop if sys.version_info >= (3, 7, 0) else asyncio.get_event_loop
-        self.future = get_loop().create_future()
+        self.future = asyncio.get_running_loop().create_future()
 
     def done(self, message):
         error = message.get_error()
