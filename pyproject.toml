@@ -13,6 +13,9 @@ dynamic = ["version", "description"]
 [project.urls]
 Home = "https://github.com/allisonkarlitskaya/systemd_ctypes/"
 
+[tool.pytest.ini_options]
+log_cli = true
+
 [tool.tox]
 legacy_tox_ini = """
 [tox]
