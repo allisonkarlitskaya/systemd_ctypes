@@ -272,6 +272,18 @@ class Bus(sd.bus):
         return bus
 
     @staticmethod
+    def from_address(address, server_id=None, attach_event=False):
+        bus = Bus()
+        sd.bus.new(bus)
+        if server_id is not None:
+            bus.set_server(True, server_id)
+        bus.set_address(address)
+        bus.start()
+        if attach_event:
+            bus.attach_event(None, 0)
+        return bus
+
+    @staticmethod
     def socketpair(attach_event=False):
         client_socket, server_socket = socket.socketpair()
         client = Bus.from_fd(client_socket.detach(), attach_event=attach_event)
