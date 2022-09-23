@@ -6,7 +6,7 @@ from systemd_ctypes import bus, introspection, run_async, BusError
 
 class TestPeerToPeer(unittest.TestCase):
     def setUp(self):
-        self.client, self.server = bus.Bus.socketpair(attach_event=True)
+        self.client, self.server = bus.Bus.socketpair()
 
         class cockpit_Test(bus.Object):
             answer = bus.Interface.Property('i', value=42)

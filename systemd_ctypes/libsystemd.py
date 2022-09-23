@@ -144,6 +144,8 @@ sd.bus.register_methods([
     (instancemethod, negative_errno, 'message_new_method_call', [POINTER(sd.bus_message_p), utf8, utf8, utf8, utf8]),
     (instancemethod, negative_errno, 'message_new_signal', [POINTER(sd.bus_message_p), utf8, utf8, utf8]),
     (instancemethod, negative_errno, 'new', [POINTER(sd.bus_p)]),
+    (instancemethod, negative_errno, 'set_address', [utf8]),
+    (instancemethod, negative_errno, 'set_client', [boolint, sd.id128]),
     (instancemethod, negative_errno, 'set_fd', [c_int, c_int]),
     (instancemethod, negative_errno, 'set_server', [boolint, sd.id128]),
     (instancemethod, negative_errno, 'start', []),
