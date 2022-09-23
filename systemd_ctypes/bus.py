@@ -306,7 +306,26 @@ class Bus(sd.bus):
     _default_user = None
 
     @staticmethod
-    def default_system(attach_event=False):
+    def new(fd=None, address=None, client=False, server=False, start=True, attach_event=True):
+        bus = Bus()
+        sd.bus.new(bus)
+        if address is not None:
+            bus.set_address(address)
+        if fd is not None:
+            bus.set_fd(fd, fd)
+        if client:
+            bus.set_client(True)
+        if server:
+            bus.set_server(True, sd.id128())
+        if address is not None or fd is not None:
+            if start:
+                bus.start()
+            if attach_event:
+                bus.attach_event(None, 0)
+        return bus
+
+    @staticmethod
+    def default_system(attach_event=True):
         if not Bus._default_system:
             Bus._default_system = Bus()
             sd.bus.default_system(Bus._default_system)
@@ -315,7 +334,7 @@ class Bus(sd.bus):
         return Bus._default_system
 
     @staticmethod
-    def default_user(attach_event=False):
+    def default_user(attach_event=True):
         if not Bus._default_user:
             Bus._default_user = Bus()
             sd.bus.default_user(Bus._default_user)
@@ -324,22 +343,10 @@ class Bus(sd.bus):
         return Bus._default_user
 
     @staticmethod
-    def from_fd(fd, server_id=None, attach_event=False):
-        bus = Bus()
-        sd.bus.new(bus)
-        if server_id is not None:
-            bus.set_server(True, server_id)
-        bus.set_fd(fd, fd)
-        bus.start()
-        if attach_event:
-            bus.attach_event(None, 0)
-        return bus
-
-    @staticmethod
-    def socketpair(attach_event=False):
+    def socketpair(attach_event=True):
         client_socket, server_socket = socket.socketpair()
-        client = Bus.from_fd(client_socket.detach(), attach_event=attach_event)
-        server = Bus.from_fd(server_socket.detach(), sd.id128(), attach_event=attach_event)
+        client = Bus.new(fd=client_socket.detach(), attach_event=attach_event)
+        server = Bus.new(fd=server_socket.detach(), server=True, attach_event=attach_event)
         return client, server
 
     def message_new_method_call(self, destination, path, interface, member, types='', *args):

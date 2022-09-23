@@ -30,7 +30,7 @@ class TestAPI(dbusmock.DBusTestCase):
     @classmethod
     def setUpClass(cls):
         cls.start_session_bus()
-        cls.bus_user = systemd_ctypes.Bus.default_user(attach_event=True)
+        cls.bus_user = systemd_ctypes.Bus.default_user()
 
     def setUp(self):
         self.mock_log = tempfile.NamedTemporaryFile()
