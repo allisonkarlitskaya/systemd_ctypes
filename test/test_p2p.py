@@ -10,9 +10,15 @@ class TestPeerToPeer(unittest.TestCase):
 
         @bus.Object.interface('cockpit.Test')
         class TestObject(bus.Object):
+            _answer = 42
+
             @bus.Object.property('i')
             def answer(self):
-                return 42
+                return self._answer
+
+            @answer.setter
+            def set_answer(self, value):
+                self._answer = value
 
             @bus.Object.method('i', 'ii')
             def divide(self, top, bottom):
@@ -26,10 +32,24 @@ class TestPeerToPeer(unittest.TestCase):
                 await asyncio.sleep(0.1)
                 return self.divide(top, bottom)
 
-        self.test_object = self.server.add_object('/test', TestObject())
+            @bus.Object.signal('is')
+            def everything_changed(self, level, info):
+                pass
+
+        self.test_object = TestObject()
+        self.test_object_slot = self.server.add_object('/test', self.test_object)
+
+        self.received_signals = None
+
+    def signals_queue(self):
+        if not self.received_signals:
+            self.received_signals = asyncio.Queue()
+            self.signals_watch = self.client.add_match("type='signal'",
+                                                       lambda msg: self.received_signals.put_nowait(msg))
+        return self.received_signals
 
     def tearDown(self):
-        del self.test_object
+        del self.test_object_slot
 
     def test_introspect(self):
         async def test():
@@ -46,6 +66,7 @@ class TestPeerToPeer(unittest.TestCase):
                         'Answer': {'type': 'i', 'flags': 'r'},
                     },
                     'signals': {
+                        'EverythingChanged': {'in': ['i', 's']},
                     },
                 },
             }
@@ -58,6 +79,18 @@ class TestPeerToPeer(unittest.TestCase):
 
             reply, = await self.client.call_method_async(None, '/test', 'org.freedesktop.DBus.Properties', 'GetAll', 's', 'cockpit.Test')
             self.assertEqual(reply, {"Answer": {"t": "i", "v": 42}})
+
+            signals = self.signals_queue()
+            self.test_object.set_answer(6*9)
+            message = await signals.get()
+
+            self.assertEqual(message.get_path(), "/test")
+            self.assertEqual(message.get_interface(), "org.freedesktop.DBus.Properties")
+            self.assertEqual(message.get_member(), "PropertiesChanged")
+            (iface, props, invalid) = message.get_body()
+            self.assertEqual(iface, "cockpit.Test")
+            self.assertEqual(props, { 'Answer': { 't': 'i', 'v': 54 } })
+            self.assertEqual(invalid, [])
         run_async(test())
 
     def test_method(self):
@@ -84,6 +117,28 @@ class TestPeerToPeer(unittest.TestCase):
                 await self.client.call_method_async(None, '/test', 'cockpit.Test', 'DivideSlowly', 'ii', 1554, 0)
         run_async(test())
 
+    def test_signal(self):
+        async def test():
+            # HACK - https://github.com/systemd/systemd/pull/24875
+            #
+            # Without this initial pointless method call, the signal
+            # below will not be received.
+            #
+            reply, = await self.client.call_method_async(None, '/test', 'org.freedesktop.DBus.Properties', 'Get',
+                                                         'ss', 'cockpit.Test', 'Answer')
+
+            signals = self.signals_queue()
+            self.test_object.everything_changed(11, 'noise')
+            message = await signals.get()
+
+            self.assertEqual(message.get_path(), "/test")
+            self.assertEqual(message.get_interface(), "cockpit.Test")
+            self.assertEqual(message.get_member(), "EverythingChanged")
+            (level, info) = message.get_body()
+            self.assertEqual(level, 11)
+            self.assertEqual(info, "noise")
+
+        run_async(test())
 
 if __name__ == '__main__':
     unittest.main()

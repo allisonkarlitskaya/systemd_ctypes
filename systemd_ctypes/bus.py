@@ -284,6 +284,12 @@ class Bus(sd.bus):
         message.append(types, *args)
         return message
 
+    def message_new_signal(self, path, interface, member, types='', *args):
+        message = BusMessage()
+        super().message_new_signal(message, path, interface, member)
+        message.append(types, *args)
+        return message
+
     def call(self, message, timeout=None):
         reply = BusMessage()
         error = sd.bus_error()
@@ -320,10 +326,18 @@ class Bus(sd.bus):
     def add_object(self, path, obj):
         slot = Slot(obj.message_received)
         super().add_object(byref(slot), path, slot.callback, slot.userdata)
+        obj.registered_on_bus(self, path)
         return slot
 
 
 class BaseObject:
+    _bus = None
+    _path = None
+
+    def registered_on_bus(self, bus, path):
+        self._bus = bus
+        self._path = path
+
     def message_received(self, message):
         try:
             reply = message.new_method_return()
@@ -345,12 +359,10 @@ class Object(BaseObject):
     @classmethod
     def prepare(cls, iface):
         cls._dbus_interface = iface
-        cls._dbus_members = {'properties': {}, 'methods': {}}
+        cls._dbus_members = {'properties': {}, 'methods': {}, 'signals': {}}
         for key, value in cls.__dict__.items():
             if not key.startswith('_') and hasattr(value, '_dbus_info'):
                 category, member, info = value._dbus_info
-                if member is None:
-                    member = ''.join(part.title() for part in key.split('_'))
                 cls._dbus_members[category][member] = value, info
         cls._dbus_xml = introspection.to_xml({
             cls._dbus_interface: {
@@ -367,15 +379,48 @@ class Object(BaseObject):
                     } for name, (_, (dbus_type,)) in cls._dbus_members['properties'].items()
                 },
                 'signals': {
+                    name: {
+                        'in': list(in_args),
+                    } for name, (_, (in_args,)) in cls._dbus_members['signals'].items()
                 },
             }
         })
         return cls
 
     @staticmethod
+    def _signal_wrapper(obj, member, in_types):
+        def invoker(self, *args):
+            obj(self, *args)
+            message = self._bus.message_new_signal(self._path, self._dbus_interface, member,
+                                                   in_types, *args)
+            self._bus.send(message, None)
+        return invoker
+
+    @staticmethod
+    def _setter_wrapper(obj, member, sig):
+        def invoker(self, value):
+            obj(self, value)
+            message = self._bus.message_new_signal(self._path, "org.freedesktop.DBus.Properties", "PropertiesChanged",
+                                                   'sa{sv}as',
+                                                   self._dbus_interface,
+                                                   { member: { 't': sig, 'v': value } },
+                                                   [])
+            self._bus.send(message, None)
+        return invoker
+
+    @staticmethod
     def _add_info(category, member, *args):
         def wrapper(obj):
-            obj._dbus_info = category, member, args
+            mem = member
+            if mem is None:
+                mem = ''.join(part.title() for part in obj.__name__.split('_'))
+            if category == 'properties':
+                (sig,) = args
+                obj.setter = lambda obj: Object._setter_wrapper(obj, mem, sig)
+            elif category == 'signals':
+                (in_types,) = args
+                obj = Object._signal_wrapper(obj, mem, in_types)
+            obj._dbus_info = category, mem, args
             return obj
         return wrapper
 
@@ -386,6 +431,10 @@ class Object(BaseObject):
     @staticmethod
     def property(dbus_type, member=None):
         return Object._add_info('properties', member, dbus_type)
+
+    @staticmethod
+    def signal(in_types=[], member=None):
+        return Object._add_info('signals', member, in_types)
 
     @staticmethod
     def method(out_types=(), in_types=(), member=None):
