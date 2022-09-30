@@ -8,33 +8,23 @@ class TestPeerToPeer(unittest.TestCase):
     def setUp(self):
         self.client, self.server = bus.Bus.socketpair(attach_event=True)
 
-        @bus.Object.interface('cockpit.Test')
+        @bus.Object.Interface('cockpit.Test')
         class TestObject(bus.Object):
-            _answer = 42
+            answer = bus.Object.Property('i', value=42)
 
-            @bus.Object.property('i')
-            def answer(self):
-                return self._answer
-
-            @answer.setter
-            def set_answer(self, value):
-                self._answer = value
-
-            @bus.Object.method('i', 'ii')
+            @bus.Object.Method('i', 'ii')
             def divide(self, top, bottom):
                 try:
                     return top // bottom
                 except ZeroDivisionError as exc:
                     raise BusError('cockpit.Error.ZeroDivisionError', 'Divide by zero') from exc
 
-            @bus.Object.method('i', 'ii')
+            @bus.Object.Method('i', 'ii')
             async def divide_slowly(self, top, bottom):
                 await asyncio.sleep(0.1)
                 return self.divide(top, bottom)
 
-            @bus.Object.signal('is')
-            def everything_changed(self, level, info):
-                pass
+            everything_changed = bus.Object.Signal('i', 's')
 
         self.test_object = TestObject()
         self.test_object_slot = self.server.add_object('/test', self.test_object)
@@ -81,7 +71,7 @@ class TestPeerToPeer(unittest.TestCase):
             self.assertEqual(reply, {"Answer": {"t": "i", "v": 42}})
 
             signals = self.signals_queue()
-            self.test_object.set_answer(6*9)
+            self.test_object.answer = 6 * 9
             message = await signals.get()
 
             self.assertEqual(message.get_path(), "/test")
