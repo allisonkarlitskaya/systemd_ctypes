@@ -13,6 +13,14 @@ dynamic = ["version", "description"]
 [project.urls]
 Home = "https://github.com/allisonkarlitskaya/systemd_ctypes/"
 
+[tool.pylint]
+max-line-length = 118
+disable = [
+  "R0903",  # Too few public methods
+  "R1705",  # Unnecessary "else" after "return"
+  "W1113",  # Keyword argument before variable positional arguments  (PEP-570 is Python 3.8)
+]
+
 [tool.pytest.ini_options]
 log_cli = true
 
