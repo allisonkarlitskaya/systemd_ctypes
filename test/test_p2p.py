@@ -8,8 +8,7 @@ class TestPeerToPeer(unittest.TestCase):
     def setUp(self):
         self.client, self.server = bus.Bus.socketpair(attach_event=True)
 
-        @bus.Object.Interface('cockpit.Test')
-        class TestObject(bus.Object):
+        class cockpit_Test(bus.Object):
             answer = bus.Object.Property('i', value=42)
 
             @bus.Object.Method('i', 'ii')
@@ -26,7 +25,7 @@ class TestPeerToPeer(unittest.TestCase):
 
             everything_changed = bus.Object.Signal('i', 's')
 
-        self.test_object = TestObject()
+        self.test_object = cockpit_Test()
         self.test_object_slot = self.server.add_object('/test', self.test_object)
 
         self.received_signals = None
@@ -47,6 +46,24 @@ class TestPeerToPeer(unittest.TestCase):
             info = introspection.parse_xml(reply)
 
             assert info == {
+                'org.freedesktop.DBus.Introspectable': {
+                    'methods': {
+                        'Introspect': {'in': [], 'out': ['s']},
+                    },
+                    'properties': {},
+                    'signals': {},
+                },
+                'org.freedesktop.DBus.Properties': {
+                    'methods': {
+                        'Get': {'in': ['s', 's'], 'out': ['v']},
+                        'GetAll': {'in': ['s'], 'out': ['a{sv}']},
+                        'Set': {'in': ['s', 's', 'v'], 'out': []},
+                    },
+                    'properties': {},
+                    'signals': {
+                        'PropertiesChanged': {'in': ['s', 'a{sv}', 'as']}
+                    },
+                },
                 'cockpit.Test': {
                     'methods': {
                         'Divide': {'in': ['i', 'i'], 'out': ['i']},
