@@ -22,6 +22,7 @@ import itertools
 import logging
 import socket
 from ctypes import c_char, byref
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from . import introspection
 from .librarywrapper import utf8
@@ -284,6 +285,12 @@ class Bus(sd.bus):
         message.append(types, *args)
         return message
 
+    def message_new_signal(self, path, interface, member, types='', *args):
+        message = BusMessage()
+        super().message_new_signal(message, path, interface, member)
+        message.append(types, *args)
+        return message
+
     def call(self, message, timeout=None):
         reply = BusMessage()
         error = sd.bus_error()
@@ -320,124 +327,468 @@ class Bus(sd.bus):
     def add_object(self, path, obj):
         slot = Slot(obj.message_received)
         super().add_object(byref(slot), path, slot.callback, slot.userdata)
+        obj.registered_on_bus(self, path)
         return slot
 
 
 class BaseObject:
-    def message_received(self, message):
-        try:
-            reply = message.new_method_return()
-            handled = self.handle_method_call(message, reply)
-        except BusError:
-            assert False  # needs proper exception handling
+    """Base object type for exporting objects on the bus
 
-        if handled:
-            # message_send() is not available in RHEL 8
-            message.get_bus().send(reply, None)
-            return 1
-        else:
-            return 0
+    This is the lowest-level class that can be passed to Bus.add_object().
 
-    def handle_method_call(self, message, reply):
+    If you want to directly subclass this, you'll need to implement
+    `message_received()`.
+
+    Subclassing from `bus.Object` is probably a better choice.
+    """
+    __dbus_bus: Optional[Bus] = None
+    __dbus_path: Optional[str] = None
+
+    def registered_on_bus(self, bus: Bus, path: str) -> None:
+        """Report that an instance was exported on a given bus and path.
+
+        This is used so that the instance knows where to send signals.
+        Bus.add_object() calls this: you probably shouldn't call this on your
+        own.
+        """
+        self.__dbus_bus = bus
+        self.__dbus_path = path
+
+        self.registered()
+
+    def registered(self) -> None:
+        """Called after an object has been registered on the bus
+
+        This is the correct method to implement to do some initial work that
+        needs to be done after registration.  The default implementation does
+        nothing.
+        """
+        pass
+
+    def emit_signal(self, interface: str, name: str, signature: str, *args: Any) -> bool:
+        """Emit a D-Bus signal on this object
+
+        The object must have been exported on the bus with Bus.add_object().
+
+        :interface: the interface of the signal
+        :name: the 'member' name of the signal to emit
+        :signature: the type signature, as a string
+        :args: the arguments, according to the signature
+        :returns: True
+        """
+        assert self.__dbus_bus is not None and self.__dbus_path is not None
+        return self.__dbus_bus.message_new_signal(self.__dbus_path, interface, name, signature, *args).send()
+
+    def message_received(self, message: BusMessage) -> bool:
+        """Called when a message is received for this object
+
+        This is the lowest level interface to the BaseObject.  You need to
+        handle method calls, properties, and introspection.
+
+        You are expected to handle the message and return True.  Normally this
+        means that you send a reply.  If you don't want to handle the message,
+        return False and other handlers will have a chance to run.  If no
+        handler handles the message, systemd will generate a suitable error
+        message and send that, instead.
+
+        :message: the message that was received
+        :returns: True if the message was handled
+        """
         raise NotImplementedError
 
-class Object(BaseObject):
+
+class Interface:
+    """The high-level base class for defining D-Bus interfaces
+
+    This class provides high-level APIs for defining methods, properties, and
+    signals, as well as implementing introspection.
+
+    On its own, this class doesn't provide a mechanism for exporting anything
+    on the bus.  The Object class does that, and you'll generally want to
+    subclass from it, as it contains several built-in standard interfaces
+    (introspection, properties, etc.).
+
+    The name of your class will be interpreted as a D-Bus interface name.
+    Underscores are converted to dots.  No case conversion is performed.  If
+    the interface name can't be represented using this scheme, or if you'd like
+    to name your class differently, you can provide an interface= kwarg to the
+    class definition.
+
+        class com_example_Interface(bus.Object):
+            pass
+
+        class MyInterface(bus.Object, interface='org.cockpit_project.Interface'):
+            pass
+
+    The methods, properties, and signals which are visible from D-Bus are
+    defined using helper classes with the corresponding names (Method,
+    Property, Signal).  You should use normal Python snake_case conventions for
+    the member names: they will automatically be converted to CamelCase by
+    splitting on underscore and converting the first letter of each resulting
+    word to uppercase.  For example, `method_name` becomes `MethodName`.
+
+    Each Method, Property, or Signal constructor takes an optional name= kwargs
+    to override the automatic name conversion convention above.
+
+    An example class might look like:
+
+        class com_example_MyObject(bus.Object):
+            created = bus.Interface.Signal('s', 'i')
+            renames = bus.Interface.Property('u', value=0)
+            name = bus.Interface.Property('s', 'undefined')
+
+            @bus.Interface.Method(out_types=(), in_types='s')
+            def rename(self, name):
+                self.renames += 1
+                self.name = name
+
+            def registered(self):
+                self.created('Hello', 42)
+
+    See the documentation for the Method, Property, and Signal classes for
+    more information and examples.
+    """
+
+    # Class variables
+    _dbus_interfaces: Dict[str, Dict[str, Dict[str, Any]]]
+    _dbus_members: Optional[Tuple[str, Dict[str, Dict[str, Any]]]]
+
+    # Instance variables: stored in Python form
+    _dbus_property_values: Optional[Dict[str, Any]] = None
+
     @classmethod
-    def prepare(cls, iface):
-        cls._dbus_interface = iface
-        cls._dbus_members = {'properties': {}, 'methods': {}}
-        for key, value in cls.__dict__.items():
-            if not key.startswith('_') and hasattr(value, '_dbus_info'):
-                category, member, info = value._dbus_info
-                if member is None:
-                    member = ''.join(part.title() for part in key.split('_'))
-                cls._dbus_members[category][member] = value, info
-        cls._dbus_xml = introspection.to_xml({
-            cls._dbus_interface: {
-                'methods': {
-                    name: {
-                        'in': list(in_args),
-                        'out': list(out_args),
-                    } for name, (_, (out_args, in_args)) in cls._dbus_members['methods'].items()
-                },
-                'properties': {
-                    name: {
-                        'flags': 'r',
-                        'type': dbus_type,
-                    } for name, (_, (dbus_type,)) in cls._dbus_members['properties'].items()
-                },
-                'signals': {
-                },
-            }
-        })
-        return cls
+    def __init_subclass__(cls, interface=None):
+        if interface is None:
+            assert '__' not in cls.__name__, 'Class name cannot contain sequential underscores'
+            interface = cls.__name__.replace('_', '.')
 
+        # This is the information for this subclass directly
+        members = {'methods': {}, 'properties': {}, 'signals': {}}
+        for name, member in cls.__dict__.items():
+            if isinstance(member, Interface._Member):
+                member.setup(interface, name, members)
+
+        # We only store the information if something was actually defined
+        if sum(len(category) for category in members.values()) > 0:
+            cls._dbus_members = (interface, members)
+
+        # This is the information for this subclass, with all its ancestors
+        cls._dbus_interfaces = dict(ancestor.__dict__['_dbus_members']
+                                    for ancestor in cls.mro()
+                                    if '_dbus_members' in ancestor.__dict__)
+
+    @classmethod
+    def _find_interface(cls, interface):
+        try:
+            return cls._dbus_interfaces[interface]
+        except KeyError as exc:
+            raise Object.Method.Unhandled from exc
+
+    @classmethod
+    def _find_category(cls, interface, category):
+        return cls._find_interface(interface)[category]
+
+    @classmethod
+    def _find_member(cls, interface, category, member):
+        category = cls._find_category(interface, category)
+        try:
+            return category[member]
+        except KeyError as exc:
+            raise Object.Method.Unhandled from exc
+
+
+    class _Member:
+        _category: str  # filled in from subclasses
+
+        _python_name: Optional[str] = None
+        _name: Optional[str] = None
+        _interface: Optional[str] = None
+        _description: Optional[Dict[str, Any]]
+
+        def __init__(self, name: Optional[str] = None) -> None:
+            self._python_name = None
+            self._interface = None
+            self._name = name
+
+        def setup(self, interface: str, name: str, members: Dict[str, Dict[str, Dict[str, Any]]]) -> None:
+            self._python_name = name  # for error messages
+            if self._name is None:
+                self._name = ''.join(word.title() for word in name.split('_'))
+            self._interface = interface
+            self._description = self._describe()
+            members[self._category][self._name] = self
+
+        def _describe(self) -> Dict[str, Any]:
+            raise NotImplementedError
+
+        def __getitem__(self, key: str) -> Any:
+            # Acts as an adaptor for dict accesses from introspection.to_xml()
+            assert self._description is not None
+            return self._description[key]
+
+
+    class Property(_Member):
+        """Defines a D-Bus property on an interface
+
+        There are two main ways to define properties: with and without getters.
+        If you define a property without a getter, then you must provide a
+        value (via the value= kwarg).  In this case, the property value is
+        maintained internally and can be accessed from Python in the usual way.
+        Change signals are sent automatically.
+
+            class MyObject(bus.Object):
+                counter = bus.Interface.Property('i', value=0)
+
+            a = MyObject()
+            a.counter = 5
+            a.counter += 1
+            print(a.counter)
+
+        The other way to define properties is with a getter function.  In this
+        case, you can read from the property in the normal way, but not write
+        to it.  You are responsible for emitting change signals for yourself.
+        You must not provide the value= kwarg.
+
+            class MyObject(bus.Object):
+                _counter = 0
+
+                counter = bus.Interface.Property('i')
+                @counter.getter
+                def get_counter(self):
+                    return self._counter
+
+                def set_counter(self, value):
+                    self._counter = value
+                    self.property_changed('Counter')
+
+        In either case, you can provide a setter function.  This function has
+        no impact on Python code, but makes the property writable from the view
+        of D-Bus.  Your setter will be called when a Properties.Set() call is
+        made, and no other action will be performed.  A trivial implementation
+        might look like:
+
+            class MyObject(bus.Object):
+                counter = bus.Interface.Property('i', value=0)
+                @counter.setter
+                def set_counter(self, value):
+                    # we got a request to set the counter from D-Bus
+                    self.counter = value
+
+        In all cases, the first (and only mandatory) argument to the
+        constructor is the D-Bus type of the property.
+
+        Your getter and setter functions can be provided by kwarg to the
+        constructor.  You can also give a name= kwarg to override the default
+        name conversion scheme.
+        """
+        _category = 'properties'
+
+        _getter: Optional[Callable[[Any], Any]]
+        _setter: Optional[Callable[[Any, Any], None]]
+        _type_string: str
+        _value: Any
+
+        def __init__(self, type_string: str,
+                     value: Any = None,
+                     name: Optional[str] = None,
+                     getter: Optional[Callable[[Any], Any]] = None,
+                     setter: Optional[Callable[[Any, Any], None]] = None):
+            assert value is None or getter is None, 'A property cannot have both a value and a getter'
+
+            super().__init__(name=name)
+            self._getter = getter
+            self._setter = setter
+            self._type_string = type_string
+            self._value = value
+
+        def _describe(self) -> Dict[str, Any]:
+            return {'type': self._type_string, 'flags': 'r' if self._setter is None else 'w'}
+
+        def __get__(self, obj: object, cls: Optional[type] = None) -> Any:
+            if obj is None:
+                return self
+            if self._getter is not None:
+                return self._getter.__get__(obj, cls)()
+            elif self._value is not None:
+                if obj._dbus_property_values is not None:
+                    return obj._dbus_property_values.get(self._name, self._value)
+                else:
+                    return self._value
+            else:
+                raise AttributeError(f"'{obj.__class__.__name__}' property '{self._python_name}' "
+                                     f"was not properly initialised: use either the 'value=' kwarg or "
+                                     f"the @'{self._python_name}.getter' decorator")
+
+        def __set__(self, obj: Any, value: Any) -> None:
+            if self._getter is not None:
+                raise AttributeError(f"Cannot directly assign '{obj.__class__.__name__}' "
+                                     "property '{self._python_name}' because it has a getter")
+            if obj._dbus_property_values is None:
+                obj._dbus_property_values = {}
+            obj._dbus_property_values[self._name] = value
+            obj.properties_changed(self._interface or obj._dbus_interface,
+                                   {self._name: {"t": self._type_string, "v": value}},
+                                   [])
+
+        def to_dbus(self, obj):
+            return {"t": self._type_string, "v": self.__get__(obj)}
+
+        def from_dbus(self, obj, value):
+            if self._setter is None or self._type_string != value["t"]:
+                raise Object.Method.Unhandled
+            self._setter.__get__(obj)(value["v"])
+
+        def getter(self, getter: Callable[[Any], Any]) -> Callable[[Any], Any]:
+            if self._value is not None:
+                raise ValueError('A property cannot have both a value and a getter')
+            if self._getter is not None:
+                raise ValueError('This property already has a getter')
+            self._getter = getter
+            return getter
+
+        def setter(self, setter: Callable[[Any, Any], None]) -> Callable[[Any, Any], None]:
+            self._setter = setter
+            return setter
+
+
+    class Signal(_Member):
+        """Defines a D-Bus signal on an interface
+
+        This is a callable which will result in the signal being emitted.
+
+        The constructor takes the types of the arguments, each one as a
+        separate parameter.  For example:
+
+            properties_changed = Interface.Signal('s', 'a{sv}', 'as')
+
+        You can give a name= kwarg to override the default name conversion
+        scheme.
+        """
+        _category = 'signals'
+
+        def __init__(self, *out_types: str, name: Optional[str] = None) -> None:
+            super().__init__(name=name)
+            self._out_types = list(out_types)
+            self._signature = ''.join(out_types)
+
+        def _describe(self) -> Dict[str, Any]:
+            return {'in': self._out_types}
+
+        def __get__(self, obj: Any, cls: Optional[type] = None) -> Callable[..., None]:
+            def emitter(obj: Object, *args: Any) -> None:
+                assert self._interface is not None
+                assert self._name is not None
+                obj.emit_signal(self._interface, self._name, self._signature, *args)
+            return emitter.__get__(obj, cls)
+
+    class Method(_Member):
+        """Defines a D-Bus method on an interface
+
+        This is a function decorator which marks a given method for export.
+
+        The constructor takes two arguments: the type of the output arguments,
+        and the type of the input arguments.  Both should be given as a
+        sequence.
+
+            @Interface.Method(['a{sv}'], ['s'])
+            def get_all(self, interface):
+                ...
+
+        You can give a name= kwarg to override the default name conversion
+        scheme.
+        """
+        _category = 'methods'
+
+        class Unhandled(Exception):
+            """Raised by a method to indicate that the message triggering that
+            method call remains unhandled."""
+            pass
+
+        def __init__(self, out_types=(), in_types=(), name=None):
+            super().__init__(name=name)
+            self._out_types = list(out_types)
+            self._in_types = list(in_types)
+            self._in_signature = ''.join(in_types)
+            self._func = None
+
+        def __get__(self, obj, cls=None):
+            return self._func.__get__(obj, cls)
+
+        def __call__(self, *args, **kwargs):
+            # decorator
+            self._func, = args
+            return self
+
+        def _describe(self) -> Dict[str, Any]:
+            return {'in': self._in_types, 'out': self._out_types}
+
+        def _invoke(self, obj, message):
+            if not message.has_signature(self._in_signature):
+                return False
+            try:
+                result = self._func.__get__(obj)(*message.get_body())
+            except BusError as error:
+                return message.reply_method_error(error)
+
+            return message.reply_method_function_return_value(self._out_types, result)
+
+
+class org_freedesktop_DBus_Peer(Interface):
+    @Interface.Method()
     @staticmethod
-    def _add_info(category, member, *args):
-        def wrapper(obj):
-            obj._dbus_info = category, member, args
-            return obj
-        return wrapper
+    def ping():
+        pass
 
+    @Interface.Method('s')
     @staticmethod
-    def interface(name):
-        return lambda cls: cls.prepare(name)
+    def get_machine_id():
+        with open('/etc/machine-id', encoding='ascii') as file:
+            return file.read().strip()
 
-    @staticmethod
-    def property(dbus_type, member=None):
-        return Object._add_info('properties', member, dbus_type)
 
-    @staticmethod
-    def method(out_types=(), in_types=(), member=None):
-        return Object._add_info('methods', member, out_types, in_types)
+class org_freedesktop_DBus_Introspectable(Interface):
+    @Interface.Method('s')
+    @classmethod
+    def introspect(cls):
+        return introspection.to_xml(cls._dbus_interfaces)
 
-    def append_property(self, reply, info):
-        func, (dbus_type,) = info
-        reply.open_container(ord('v'), dbus_type)
-        reply.append_arg(dbus_type, func(self))
-        reply.close_container()
 
+class org_freedesktop_DBus_Properties(Interface):
+    properties_changed = Interface.Signal('s', 'a{sv}', 'as')
+
+    @Interface.Method('v', 'ss')
+    def get(self, interface, name):
+        return self._find_member(interface, 'properties', name).to_dbus(self)
+
+    @Interface.Method(['a{sv}'], 's')
+    def get_all(self, interface):
+        properties = self._find_category(interface, 'properties')
+        return {name: prop.to_dbus(self) for name, prop in properties.items()}
+
+    @Interface.Method('', 'ssv')
+    def set(self, interface, name, value):
+        self._find_member(interface, 'properties', name).from_dbus(self, value)
+
+
+class Object(org_freedesktop_DBus_Introspectable,
+             org_freedesktop_DBus_Peer,
+             org_freedesktop_DBus_Properties,
+             BaseObject,
+             Interface):
+    """High-level base class for exporting objects on D-Bus
+
+    This is usually where you should start.
+
+    This provides a base for exporting objects on the bus, implements the
+    standard D-Bus interfaces, and allows you to add your own interfaces to the
+    mix.  See the documentation for Interface to find out how to define and
+    implement your D-Bus interface.
+    """
     def message_received(self, message):
         interface = message.get_interface(message)
         method = message.get_member()
 
-        if interface == 'org.freedesktop.DBus.Introspectable':
-            if method == 'Introspect' and message.has_signature(''):
-                return message.reply_method_return('s', self._dbus_xml)
-
-        elif interface == 'org.freedesktop.DBus.Properties':
-            if method == 'GetAll' and message.has_signature('s'):
-                iface, = message.get_body()
-                if iface == self._dbus_interface:
-                    reply = message.new_method_return()
-                    reply.open_container(ord('a'), '{sv}')
-                    for name, info in self._dbus_members['properties'].items():
-                        reply.open_container(ord('e'), 'sv')
-                        reply.append_arg('s', name)
-                        self.append_property(reply, info)
-                        reply.close_container()
-                    reply.close_container()
-                    return reply.send()
-
-            elif method == 'Get' and message.has_signature('ss'):
-                iface, name = message.get_body()
-                if iface == self._dbus_interface:
-                    info = self._dbus_members['properties'].get(name)
-                    if info:
-                        reply = message.new_method_return()
-                        self.append_property(reply, info)
-                        return reply.send()
-
-        elif interface == self._dbus_interface:
-            info = self._dbus_members['methods'].get(message.get_member())
-            if info:
-                handler, (out_types, in_types) = info
-                if message.has_signature(''.join(in_types)):
-                    try:
-                        result = handler(self, *message.get_body())
-                    except BusError as exc:
-                        return message.reply_method_error(exc)
-
-                    return message.reply_method_function_return_value(out_types, result)
-
-        return False
+        try:
+            return self._find_member(interface, 'methods', method)._invoke(self, message)
+        except Object.Method.Unhandled:
+            return False
