@@ -22,7 +22,7 @@ import itertools
 import logging
 import socket
 from ctypes import c_char, byref
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 from . import introspection
 from .librarywrapper import utf8
@@ -33,6 +33,15 @@ logger = logging.getLogger(__name__)
 
 
 class BusError(Exception):
+    """An exception corresponding to a D-Bus error message
+
+    This exception is raised by the method call methods.  You can also raise it
+    from your own method handlers.  It can also be passed directly to functions
+    such as Message.reply_method_error().
+
+    :name: the 'code' of the error, like org.freedesktop.DBus.Error.UnknownMethod
+    :message: a human-readable description of the error
+    """
     def __init__(self, name, message):
         super().__init__(f'{name}: {message}')
         self.name = name
@@ -40,18 +49,42 @@ class BusError(Exception):
 
 
 class BusMessage(sd.bus_message):
-    def get_bus(self):
+    """A message, received from or to be sent over D-Bus
+
+    This is the low-level interface to receiving and sending individual
+    messages over D-Bus.  You won't normally need to use it.
+
+    A message is associated with a particular bus.  You can create messages for
+    a bus with Bus.message_new_method_call() or Bus.message_new_signal().  You
+    can create replies to method calls with Message.new_method_return() or
+    Message.new_method_error().  You can append arguments with Message.append()
+    and send the message with Message.send().
+    """
+    def get_bus(self) -> 'Bus':
+        """Get the bus that a message is associated with.
+
+        This is the bus that a message came from or will be sent on.  Every
+        message has an associated bus, and it cannot be changed.
+
+        :returns: the Bus
+        """
         return Bus.ref(super().get_bus())
 
-    def get_error(self):
+    def get_error(self) -> Optional[BusError]:
+        """Get the BusError from a message.
+
+        :returns: a BusError for an error message, or None for a non-error message
+        """
         error = super().get_error()
         if error:
             return BusError(*error.contents.get())
         else:
             return None
 
-    def new_method_return(self, signature='', *args):
-        """Creates a new method return message as a reply to this message.
+    def new_method_return(self, signature: str = '', *args: Any) -> 'BusMessage':
+        """Create a new (successful) return message as a reply to this message.
+
+        This only makes sense when performed on a method call message.
 
         :signature: The signature of the result, as a string.
         :args: The values to send, conforming to the signature string.
@@ -63,12 +96,20 @@ class BusMessage(sd.bus_message):
         reply.append(signature, *args)
         return reply
 
-    def new_method_error(self, error):
+    def new_method_error(self, error: BusError) -> 'BusMessage':
+        """Create a new error message as a reply to this message.
+
+        This only makes sense when performed on a method call message.
+
+        :error: BusError containing the error code and message to send
+
+        :returns: the reply message
+        """
         reply = BusMessage()
         super().new_method_errorf(reply, error.name, "%s", error.message)
         return reply
 
-    def append_with_info(self, typeinfo, value):
+    def _append_with_info(self, typeinfo: tuple, value: Any) -> None:
         category, contents, child_info = typeinfo
 
         try:
@@ -85,7 +126,7 @@ class BusMessage(sd.bus_message):
         # Variants
         if category == 'v':
             self.open_container(ord(category), value['t'])
-            self.append_with_info(parse_typestring(value['t']), value['v'])
+            self._append_with_info(parse_typestring(value['t']), value['v'])
             self.close_container()
             return
 
@@ -95,19 +136,29 @@ class BusMessage(sd.bus_message):
 
         self.open_container(ord(category), contents)
         for child_info, child in zip(child_info_iter, value_iter):
-            self.append_with_info(child_info, child)
+            self._append_with_info(child_info, child)
         self.close_container()
 
-    def append_arg(self, typestring, arg):
-        self.append_with_info(parse_typestring(typestring), arg)
+    def append_arg(self, typestring: str, arg: Any) -> None:
+        """Append a single argument to the message.
 
-    def append(self, signature, *args):
+        :typestring: a single typestring, such as 's', or 'a{sv}'
+        :arg: the argument to append, matching the typestring
+        """
+        self._append_with_info(parse_typestring(typestring), arg)
+
+    def append(self, signature: str, *args: Any) -> None:
+        """Append zero or more arguments to the message.
+
+        :signature: concatenated typestrings, such 'a{sv}' (one arg), or 'ss' (two args)
+        :args: one argument for each type string in the signature
+        """
         infos = parse_signature(signature)
         assert len(infos) == len(args)
         for info, arg in zip(infos, args):
-            self.append_with_info(info, arg)
+            self._append_with_info(info, arg)
 
-    def yield_values(self):
+    def _yield_values(self):
         category_holder, contents_holder = c_char(), utf8()
         while self.peek_type(byref(category_holder), byref(contents_holder)):
             category, contents = chr(ord(category_holder.value)), contents_holder.value
@@ -128,7 +179,7 @@ class BusMessage(sd.bus_message):
                 constructor = tuple
 
             self.enter_container(ord(category), contents)
-            value = constructor(self.yield_values())
+            value = constructor(self._yield_values())
             self.exit_container()
 
             # base64 encode binary blobs
@@ -137,11 +188,23 @@ class BusMessage(sd.bus_message):
 
             yield value
 
-    def get_body(self):
-        self.rewind(True)
-        return tuple(self.yield_values())
+    def get_body(self) -> Tuple[Any, ...]:
+        """Gets the body of a message.
 
-    def send(self):
+        Possible return values are (), ('single',), or ('x', 'y').  If you
+        check the signature of the message using Message.has_signature() then
+        you can use tuple unpacking.
+
+           single, = message.get_body()
+
+           x, y = other_message.get_body()
+
+        :returns: an n-tuple containing one value per argument in the message
+        """
+        self.rewind(True)
+        return tuple(self._yield_values())
+
+    def send(self) -> bool:  # Literal[True]
         """Sends a message on the bus that it was created for.
 
         :returns: True
@@ -149,7 +212,7 @@ class BusMessage(sd.bus_message):
         self.get_bus().send(self, None)
         return True
 
-    def reply_method_error(self, error):
+    def reply_method_error(self, error: BusError) -> bool:  # Literal[True]
         """Sends an error as a reply to a method call message.
 
         :error: A BusError
@@ -158,7 +221,7 @@ class BusMessage(sd.bus_message):
         """
         return self.new_method_error(error).send()
 
-    def reply_method_return(self, signature='', *args):
+    def reply_method_return(self, signature: str = '', *args: Any) -> bool:  # Literal[True]
         """Sends a return value as a reply to a method call message.
 
         :signature: The signature of the result, as a string.
@@ -168,13 +231,13 @@ class BusMessage(sd.bus_message):
         """
         return self.new_method_return(signature, *args).send()
 
-    def _coroutine_task_complete(self, out_types, task):
+    def _coroutine_task_complete(self, out_types: Sequence[str], task: asyncio.Task) -> None:
         try:
-            self.reply_method_return(out_types, task.result())
+            self.reply_method_return(''.join(out_types), task.result())
         except BusError as exc:
-            return self.reply_method_error(exc)
+            self.reply_method_error(exc)
 
-    def reply_method_function_return_value(self, out_types, return_value):
+    def reply_method_function_return_value(self, out_types: Sequence[str], return_value: Any) -> bool:  # Literal[True]:
         """Sends the result of a function call as a reply to a method call message.
 
         This call does a bit of magic: it adapts from the usual Python return
@@ -226,10 +289,10 @@ class Slot(sd.bus_slot):
 
 class PendingCall(Slot):
     def __init__(self):
-        super().__init__(self.done)
+        super().__init__(self._done)
         self.future = asyncio.get_running_loop().create_future()
 
-    def done(self, message):
+    def _done(self, message):
         error = message.get_error()
         if error is not None:
             self.future.set_exception(error)
@@ -510,7 +573,7 @@ class Interface:
             self._interface = None
             self._name = name
 
-        def setup(self, interface: str, name: str, members: Dict[str, Dict[str, Dict[str, Any]]]) -> None:
+        def setup(self, interface: str, name: str, members: Dict[str, Dict[str, 'Interface._Member']]) -> None:
             self._python_name = name  # for error messages
             if self._name is None:
                 self._name = ''.join(word.title() for word in name.split('_'))
@@ -604,7 +667,8 @@ class Interface:
         def _describe(self) -> Dict[str, Any]:
             return {'type': self._type_string, 'flags': 'r' if self._setter is None else 'w'}
 
-        def __get__(self, obj: object, cls: Optional[type] = None) -> Any:
+        def __get__(self, obj: 'org_freedesktop_DBus_Properties', cls: Optional[type] = None) -> Any:
+            assert self._name is not None
             if obj is None:
                 return self
             if self._getter is not None:
@@ -619,16 +683,15 @@ class Interface:
                                      f"was not properly initialised: use either the 'value=' kwarg or "
                                      f"the @'{self._python_name}.getter' decorator")
 
-        def __set__(self, obj: Any, value: Any) -> None:
+        def __set__(self, obj: 'org_freedesktop_DBus_Properties', value: Any) -> None:
+            assert self._name is not None
             if self._getter is not None:
                 raise AttributeError(f"Cannot directly assign '{obj.__class__.__name__}' "
                                      "property '{self._python_name}' because it has a getter")
             if obj._dbus_property_values is None:
                 obj._dbus_property_values = {}
             obj._dbus_property_values[self._name] = value
-            obj.properties_changed(self._interface or obj._dbus_interface,
-                                   {self._name: {"t": self._type_string, "v": value}},
-                                   [])
+            obj.properties_changed(self._interface, {self._name: {"t": self._type_string, "v": value}}, [])
 
         def to_dbus(self, obj):
             return {"t": self._type_string, "v": self.__get__(obj)}
