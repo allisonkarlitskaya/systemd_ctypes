@@ -18,7 +18,6 @@
 import asyncio
 import base64
 import functools
-import inspect
 import itertools
 import logging
 import socket
@@ -423,10 +422,8 @@ class Object(BaseObject):
     splitting on underscore and converting the first letter of each resulting
     word to uppercase.  For example, `method_name` becomes `MethodName`.
 
-    Each Method, Property, or Signal constructor takes optional kwargs for
-    name= (to override the automatic name conversion convention above) and
-    interface= (to define that member on a different interface than the
-    interface of the class).  Those arguments should not normally be needed.
+    Each Method, Property, or Signal constructor takes an optional name= kwargs
+    to override the automatic name conversion convention above.
 
     An example class might look like:
 
@@ -448,7 +445,8 @@ class Object(BaseObject):
     """
 
     # Class variables
-    _dbus_members: dict[str, dict[str, dict[str, Any]]]
+    _dbus_interfaces: dict[str, dict[str, dict[str, Any]]]
+    _dbus_members: Optional[tuple[str, dict[str, dict[str, Any]]]]
 
     # Instance variables: stored in Python form
     _dbus_property_values: Optional[dict[str, Any]] = None
@@ -458,9 +456,21 @@ class Object(BaseObject):
         if interface is None:
             assert '__' not in cls.__name__, 'Class name cannot contain sequential underscores'
             interface = cls.__name__.replace('_', '.')
-        cls._dbus_members = {}
-        for name, member in inspect.getmembers_static(cls, lambda obj: isinstance(obj, Object._Member)):
-            member.setup(interface, name, cls._dbus_members)
+
+        # This is the information for this subclass directly
+        members = {'methods': {}, 'properties': {}, 'signals': {}}
+        for name, member in cls.__dict__.items():
+            if isinstance(member, Object._Member):
+                member.setup(interface, name, members)
+
+        # We only store the information if something was actually defined
+        if sum(len(category) for category in members.values()) > 0:
+            cls._dbus_members = (interface, members)
+
+        # This is the information for this subclass, with all its ancestors
+        cls._dbus_interfaces = dict(ancestor.__dict__['_dbus_members']
+                                    for ancestor in cls.mro()
+                                    if '_dbus_members' in ancestor.__dict__)
 
     class _Member:
         _category: str  # filled in from subclasses
@@ -470,20 +480,18 @@ class Object(BaseObject):
         _interface: Optional[str] = None
         _description: Optional[dict[str, Any]]
 
-        def __init__(self, name: Optional[str] = None, interface: Optional[str] = None) -> None:
+        def __init__(self, name: Optional[str] = None) -> None:
             self._python_name = None
-            self._interface = interface
+            self._interface = None
             self._name = name
 
         def setup(self, interface: str, name: str, members: dict[str, dict[str, dict[str, Any]]]) -> None:
             self._python_name = name  # for error messages
             if self._name is None:
                 self._name = ''.join(word.title() for word in name.split('_'))
-            if self._interface is None:
-                self._interface = interface
+            self._interface = interface
             self._description = self._describe()
-            vtable = {'methods': {}, 'properties': {}, 'signals': {}}
-            members.setdefault(self._interface, vtable).setdefault(self._category, {})[self._name] = self
+            members[self._category][self._name] = self
 
         def _describe(self) -> dict[str, Any]:
             raise NotImplementedError
@@ -545,9 +553,8 @@ class Object(BaseObject):
         constructor is the D-Bus type of the property.
 
         Your getter and setter functions can be provided by kwarg to the
-        constructor.  You can also give a name= kwarg (to override the default
-        name conversion scheme) or an interface= kwarg (to override the default
-        interface name).
+        constructor.  You can also give a name= kwarg to override the default
+        name conversion scheme.
         """
         _category = 'properties'
 
@@ -559,12 +566,11 @@ class Object(BaseObject):
         def __init__(self, type_string: str,
                      value: Any = None,
                      name: Optional[str] = None,
-                     interface: Optional[str] = None,
                      getter: Optional[Callable[[Any], Any]] = None,
                      setter: Optional[Callable[[Any, Any], None]] = None):
             assert value is None or getter is None, 'A property cannot have both a value and a getter'
 
-            super().__init__(name=name, interface=interface)
+            super().__init__(name=name)
             self._getter = getter
             self._setter = setter
             self._type_string = type_string
@@ -622,8 +628,8 @@ class Object(BaseObject):
     class Signal(_Member):
         _category = 'signals'
 
-        def __init__(self, *out_types: str, name: Optional[str] = None, interface: Optional[str] = None) -> None:
-            super().__init__(name=name, interface=interface)
+        def __init__(self, *out_types: str, name: Optional[str] = None) -> None:
+            super().__init__(name=name)
             self._out_types = list(out_types)
             self._signature = ''.join(out_types)
 
@@ -642,8 +648,8 @@ class Object(BaseObject):
         class Unhandled(Exception):
             pass
 
-        def __init__(self, out_types=(), in_types=(), name=None, interface=None):
-            super().__init__(name=name, interface=interface)
+        def __init__(self, out_types=(), in_types=(), name=None):
+            super().__init__(name=name)
             self._out_types = list(out_types)
             self._in_types = list(in_types)
             self._in_signature = ''.join(in_types)
@@ -667,126 +673,78 @@ class Object(BaseObject):
                 result = self._func.__get__(obj)(*message.get_body())
             except BusError as error:
                 return message.reply_method_error(error)
-            except Object.Method.Unhandled:
-                return False
 
             return message.reply_method_function_return_value(self._out_types, result)
 
+    @classmethod
+    def _find_interface(cls, interface):
+        try:
+            return cls._dbus_interfaces[interface]
+        except KeyError as exc:
+            raise Object.Method.Unhandled from exc
+
+    @classmethod
+    def _find_category(cls, interface, category):
+        return cls._find_interface(interface)[category]
+
+    @classmethod
+    def _find_member(cls, interface, category, member):
+        category = cls._find_category(interface, category)
+        try:
+            return category[member]
+        except KeyError as exc:
+            raise Object.Method.Unhandled from exc
 
     def message_received(self, message):
         interface = message.get_interface(message)
         method = message.get_member()
 
         try:
-            method = self._dbus_members[interface]['methods'][method]
-        except KeyError:
+            return self._find_member(interface, 'methods', method).invoke(self, message)
+        except Object.Method.Unhandled:
             return False
-        return method.invoke(self, message)
 
-    @Method('s', interface='org.freedesktop.DBus.Introspectable')
+
+class org_freedesktop_DBus_Peer(Object):
+    @Object.Method()
+    @staticmethod
+    def ping():
+        pass
+
+    @Object.Method('s')
+    @staticmethod
+    def get_machine_id():
+        with open('/etc/machine-id') as file:
+            return file.read().strip()
+
+
+class org_freedesktop_DBus_Introspectable(Object):
+    @Object.Method('s')
     @classmethod
     def introspect(cls):
-        return introspection.to_xml(cls._dbus_members)
+        return introspection.to_xml(cls._dbus_interfaces)
 
-    properties_changed = Signal('s', 'a{sv}', 'as', interface='org.freedesktop.DBus.Properties')
 
-    @Method('v', 'ss', interface='org.freedesktop.DBus.Properties')
+class org_freedesktop_DBus_Properties(Object):
+    properties_changed = Object.Signal('s', 'a{sv}', 'as')
+
+    @Object.Method('v', 'ss')
     def get(self, interface, name):
-        try:
-            prop = self._dbus_members[interface]['properties'][name]
-        except KeyError as exc:
-            raise Object.Method.Unhandled from exc
+        return self._find_member(interface, 'properties', name).to_dbus(self)
 
-        return prop.to_dbus(self)
-
-    @Method(['a{sv}'], 's', interface='org.freedesktop.DBus.Properties')
+    @Object.Method(['a{sv}'], 's')
     def get_all(self, interface):
-        try:
-            properties = self._dbus_members[interface]['properties']
-        except KeyError as exc:
-            raise Object.Method.Unhandled from exc
-
+        properties = self._find_category(interface, 'properties')
         return {name: prop.to_dbus(self) for name, prop in properties.items()}
 
-    @Method('', 'ssv', interface='org.freedesktop.DBus.Properties')
+    @Object.Method('', 'ssv')
     def set(self, interface, name, value):
-        try:
-            prop = self._dbus_members[interface]['properties'][name]
-        except KeyError as exc:
-            raise Object.Method.Unhandled from exc
-
-        prop.from_dbus(self, value)
-"""
-class MyObj(Object):
-    _dbus_interface = 'cockpit.Test'
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._path='/test'
-        self._only_getter = 'old'
-        self._getter_setter = 'old'
-
-    simple = Property('s', value='old')
-
-    only_getter = Property('s')
-    @only_getter.getter
-    def get_only_getter(self) -> str:
-        return self._only_getter
-
-    only_setter = Property('s', value='old')
-    @only_setter.setter
-    def set_only_setter(self, value: str) -> None:
-        self.only_setter = value
-
-    getter_setter = Property('s')
-    @getter_setter.getter
-    def get_getter_setter(self) -> str:
-        return self._getter_setter
-    @getter_setter.setter
-    def set_getter_setter(self, value: str) -> None:
-        self._getter_setter = value
-        self.property_changed('GetterSetter')
-
-    everything_changed = Signal('')
+        self._find_member(interface, 'properties', name).from_dbus(self, value)
 
 
-class Dumb:
-    indent = 0
-
-    def open_container(self, *args):
-        print('  ' * self.indent, 'open', args)
-        self.indent += 1
-
-    def close_container(self, *args):
-        print()
-        self.indent -= 1
-
-    def append_arg(self, sig, val):
-        print('  ' * self.indent, 'append', sig, val)
-
-a = MyObj()
-assert a.simple == 'old'
-a.simple = 'new'
-assert a.simple == 'new'
-assert a.org_freedesktop_DBus_Properties_Set(Dumb(), 'cockpit.Test', 'Simple', 123) == False
-assert a.simple == 'new'
-
-assert a.only_getter == 'old'
-try:
-    a.only_getter = 'new'
-except AttributeError:
+class MegaGupZ(
+        org_freedesktop_DBus_Introspectable,
+        org_freedesktop_DBus_Peer,
+        org_freedesktop_DBus_Properties,
+        ):
     pass
-assert a.only_getter == 'old'
-assert a.org_freedesktop_DBus_Properties_Set(Dumb(), 'cockpit.Test', 'OnlyGetter', 123) == False
-assert a.only_getter == 'old'
-
-assert a.only_setter == 'old'
-a.only_setter = 'new'
-assert a.only_setter == 'new'
-assert a.org_freedesktop_DBus_Properties_Set(Dumb(), 'cockpit.Test', 'OnlySetter', Variant('s', 'from-bus')) == True
-assert a.only_setter == 'from-bus'
-
-print (a.org_freedesktop_DBus_Properties_GetAll(Dumb(), 'cockpit.Test'))
-
-a.everything_changed()
-"""

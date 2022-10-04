@@ -8,7 +8,7 @@ class TestPeerToPeer(unittest.TestCase):
     def setUp(self):
         self.client, self.server = bus.Bus.socketpair(attach_event=True)
 
-        class cockpit_Test(bus.Object):
+        class cockpit_Test(bus.MegaGupZ):
             answer = bus.Object.Property('i', value=42)
 
             @bus.Object.Method('i', 'ii')
@@ -49,6 +49,14 @@ class TestPeerToPeer(unittest.TestCase):
                 'org.freedesktop.DBus.Introspectable': {
                     'methods': {
                         'Introspect': {'in': [], 'out': ['s']},
+                    },
+                    'properties': {},
+                    'signals': {},
+                },
+                'org.freedesktop.DBus.Peer': {
+                    'methods': {
+                        'GetMachineId': {'in': [], 'out': ['s']},
+                        'Ping': {'in': [], 'out': []},
                     },
                     'properties': {},
                     'signals': {},
