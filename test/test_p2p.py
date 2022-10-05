@@ -1,13 +1,13 @@
 import asyncio
+import socket
 import unittest
+from tempfile import TemporaryDirectory
 
 from systemd_ctypes import bus, introspection, run_async, BusError
 
 
-class TestPeerToPeer(unittest.TestCase):
+class CommonTests:
     def setUp(self):
-        self.client, self.server = bus.Bus.socketpair()
-
         class cockpit_Test(bus.Object):
             answer = bus.Interface.Property('i', value=42)
 
@@ -154,6 +154,29 @@ class TestPeerToPeer(unittest.TestCase):
             self.assertEqual(info, "noise")
 
         run_async(test())
+
+class TestAddress(CommonTests, unittest.TestCase):
+    def setUp(self):
+        with TemporaryDirectory() as tmpdir:
+            socket_path = f'{tmpdir}/listener'
+
+            listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            listener.bind(socket_path)
+            listener.listen()
+
+            self.client = bus.Bus.new(address=f'unix:path={socket_path}')
+            server_socket, _ = listener.accept()
+            listener.close()
+
+        self.server = bus.Bus.new(fd=server_socket.detach(), server=True)
+        super().setUp()
+
+
+class TestSocketPair(CommonTests, unittest.TestCase):
+    def setUp(self):
+        self.client, self.server = bus.Bus.socketpair()
+        super().setUp()
+
 
 if __name__ == '__main__':
     unittest.main()
