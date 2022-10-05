@@ -174,7 +174,9 @@ class TestAddress(CommonTests, unittest.TestCase):
 
 class TestSocketPair(CommonTests, unittest.TestCase):
     def setUp(self):
-        self.client, self.server = bus.Bus.socketpair()
+        client_socket, server_socket = socket.socketpair()
+        self.client = bus.Bus.new(fd=client_socket.detach())
+        self.server = bus.Bus.new(fd=server_socket.detach(), server=True)
         super().setUp()
 
 
