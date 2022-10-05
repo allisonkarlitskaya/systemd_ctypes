@@ -306,15 +306,15 @@ class Bus(sd.bus):
     _default_user = None
 
     @staticmethod
-    def new(fd=None, address=None, client=False, server=False, start=True, attach_event=True):
+    def new(fd=None, address=None, bus_client=False, server=False, start=True, attach_event=True):
         bus = Bus()
         sd.bus.new(bus)
         if address is not None:
             bus.set_address(address)
         if fd is not None:
             bus.set_fd(fd, fd)
-        if client:
-            bus.set_client(True)
+        if bus_client:
+            bus.set_bus_client(True)
         if server:
             bus.set_server(True, sd.id128())
         if address is not None or fd is not None:
