@@ -404,8 +404,8 @@ class BaseObject:
 
     Subclassing from `bus.Object` is probably a better choice.
     """
-    __dbus_bus: Optional[Bus] = None
-    __dbus_path: Optional[str] = None
+    _dbus_bus: Optional[Bus] = None
+    _dbus_path: Optional[str] = None
 
     def registered_on_bus(self, bus: Bus, path: str) -> None:
         """Report that an instance was exported on a given bus and path.
@@ -414,8 +414,8 @@ class BaseObject:
         Bus.add_object() calls this: you probably shouldn't call this on your
         own.
         """
-        self.__dbus_bus = bus
-        self.__dbus_path = path
+        self._dbus_bus = bus
+        self._dbus_path = path
 
         self.registered()
 
@@ -439,8 +439,8 @@ class BaseObject:
         :args: the arguments, according to the signature
         :returns: True
         """
-        assert self.__dbus_bus is not None and self.__dbus_path is not None
-        return self.__dbus_bus.message_new_signal(self.__dbus_path, interface, name, signature, *args).send()
+        assert self._dbus_bus is not None and self._dbus_path is not None
+        return self._dbus_bus.message_new_signal(self._dbus_path, interface, name, signature, *args).send()
 
     def message_received(self, message: BusMessage) -> bool:
         """Called when a message is received for this object
@@ -691,7 +691,8 @@ class Interface:
             if obj._dbus_property_values is None:
                 obj._dbus_property_values = {}
             obj._dbus_property_values[self._name] = value
-            obj.properties_changed(self._interface, {self._name: {"t": self._type_string, "v": value}}, [])
+            if obj._dbus_bus is not None:
+                obj.properties_changed(self._interface, {self._name: {"t": self._type_string, "v": value}}, [])
 
         def to_dbus(self, obj):
             return {"t": self._type_string, "v": self.__get__(obj)}
