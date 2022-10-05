@@ -20,7 +20,6 @@ import base64
 import functools
 import itertools
 import logging
-import socket
 from ctypes import c_char, byref
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
@@ -341,13 +340,6 @@ class Bus(sd.bus):
             if attach_event:
                 Bus._default_user.attach_event(None, 0)
         return Bus._default_user
-
-    @staticmethod
-    def socketpair(attach_event=True):
-        client_socket, server_socket = socket.socketpair()
-        client = Bus.new(fd=client_socket.detach(), attach_event=attach_event)
-        server = Bus.new(fd=server_socket.detach(), server=True, attach_event=attach_event)
-        return client, server
 
     def message_new_method_call(self, destination, path, interface, member, types='', *args):
         message = BusMessage()
