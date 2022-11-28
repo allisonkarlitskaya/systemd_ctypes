@@ -13,6 +13,9 @@ dynamic = ["version", "description"]
 [project.urls]
 Home = "https://github.com/allisonkarlitskaya/systemd_ctypes/"
 
+[tool.mypy]
+mypy_path = 'src'
+
 [tool.pylint]
 max-line-length = 118
 disable = [
@@ -22,7 +25,11 @@ disable = [
 ]
 
 [tool.pytest.ini_options]
+pythonpath = ["src"]
 log_cli = true
+
+[tool.coverage.paths]
+source = ["src", "*/site-packages"]
 
 [tool.tox]
 legacy_tox_ini = """
@@ -38,9 +45,9 @@ deps=
   pytest
   python-dbusmock
 commands =
-  python3 -m pyflakes systemd_ctypes test
+  python3 -m pyflakes src/systemd_ctypes test
   python3 -m coverage erase
-  python3 -m coverage run --source systemd_ctypes --module pytest {posargs}
+  python3 -m coverage run --source systemd_ctypes --module pytest -opythonpath= {posargs}
   python3 -m coverage report --skip-covered  --fail-under=85 --show-missing
 
 [testenv:site]
