@@ -232,7 +232,7 @@ class BusMessage(sd.bus_message):
 
     def _coroutine_task_complete(self, out_types: Sequence[str], task: asyncio.Task) -> None:
         try:
-            self.reply_method_return(''.join(out_types), task.result())
+            self.reply_method_function_return_value(out_types, task.result())
         except BusError as exc:
             self.reply_method_error(exc)
 

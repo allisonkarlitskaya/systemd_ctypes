@@ -23,6 +23,23 @@ class CommonTests:
                 await asyncio.sleep(0.1)
                 return self.divide(top, bottom)
 
+            @bus.Interface.Method('sss', 'ss')
+            def partition(self, string, sep):
+                return string.partition(sep)
+
+            @bus.Interface.Method('sss', 'ss')
+            async def partition_slowly(self, string, sep):
+                await asyncio.sleep(0.1)
+                return string.partition(sep)
+
+            @bus.Interface.Method('')
+            def do_nothing(self):
+                pass
+
+            @bus.Interface.Method('')
+            async def do_nothing_slowly(self):
+                await asyncio.sleep(0.1)
+
             everything_changed = bus.Interface.Signal('i', 's')
 
         self.test_object = cockpit_Test()
@@ -77,6 +94,10 @@ class CommonTests:
                     'methods': {
                         'Divide': {'in': ['i', 'i'], 'out': ['i']},
                         'DivideSlowly': {'in': ['i', 'i'], 'out': ['i']},
+                        'Partition': {'in': ['s', 's'], 'out': ['s', 's', 's']},
+                        'PartitionSlowly': {'in': ['s', 's'], 'out': ['s', 's', 's']},
+                        'DoNothing': {'in': [], 'out': []},
+                        'DoNothingSlowly': {'in': [], 'out': []},
                     },
                     'properties': {
                         'Answer': {'type': 'i', 'flags': 'r'},
@@ -113,9 +134,16 @@ class CommonTests:
 
     def test_method(self):
         async def test():
+            reply = await self.client.call_method_async(None, '/test', 'cockpit.Test', 'DoNothing')
+            self.assertEqual(reply, ())
+
             reply, = await self.client.call_method_async(None, '/test', 'cockpit.Test',
                                                          'Divide', 'ii', 1554, 37)
             self.assertEqual(reply, 42)
+
+            reply = await self.client.call_method_async(None, '/test', 'cockpit.Test',
+                                                        'Partition', 'ss', 'start:end', ':')
+            self.assertEqual(reply, ('start', ':', 'end'))
 
         run_async(test())
 
@@ -127,9 +155,16 @@ class CommonTests:
 
     def test_async_method(self):
         async def test():
+            reply = await self.client.call_method_async(None, '/test', 'cockpit.Test', 'DoNothingSlowly')
+            self.assertEqual(reply, ())
+
             reply, = await self.client.call_method_async(None, '/test', 'cockpit.Test',
                                                          'DivideSlowly', 'ii', 1554, 37)
             self.assertEqual(reply, 42)
+
+            reply = await self.client.call_method_async(None, '/test', 'cockpit.Test',
+                                                        'PartitionSlowly', 'ss', 'start:end', ',')
+            self.assertEqual(reply, ('start:end', '', ''))
 
         run_async(test())
 
