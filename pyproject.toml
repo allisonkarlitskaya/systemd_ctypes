@@ -31,6 +31,18 @@ log_cli = true
 [tool.coverage.paths]
 source = ["src", "*/site-packages"]
 
+[tool.coverage.run]
+source_pkgs = ["systemd_ctypes"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = [
+  "pragma: no cover",  # default
+  "raise NotImplementedError",
+]
+
 [tool.tox]
 legacy_tox_ini = """
 [tox]
@@ -40,15 +52,12 @@ envlist = site
 [testenv]
 sitepackages = true
 deps=
-  coverage
   pyflakes
-  pytest
+  pytest-cov
   python-dbusmock
 commands =
   python3 -m pyflakes src/systemd_ctypes test
-  python3 -m coverage erase
-  python3 -m coverage run --source systemd_ctypes --module pytest -opythonpath= {posargs}
-  python3 -m coverage report --skip-covered  --fail-under=85 --show-missing
+  python3 -m pytest -opythonpath= --cov {posargs}
 
 [testenv:site]
 deps=
