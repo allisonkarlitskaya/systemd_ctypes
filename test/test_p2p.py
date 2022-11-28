@@ -42,7 +42,8 @@ class CommonTests:
 
     def test_introspect(self):
         async def test():
-            reply, = await self.client.call_method_async(None, '/test', 'org.freedesktop.DBus.Introspectable', 'Introspect')
+            reply, = await self.client.call_method_async(None, '/test', 'org.freedesktop.DBus.Introspectable',
+                                                         'Introspect')
             info = introspection.parse_xml(reply)
 
             assert info == {
@@ -89,10 +90,12 @@ class CommonTests:
 
     def test_properties(self):
         async def test():
-            reply, = await self.client.call_method_async(None, '/test', 'org.freedesktop.DBus.Properties', 'Get', 'ss', 'cockpit.Test', 'Answer')
+            reply, = await self.client.call_method_async(None, '/test', 'org.freedesktop.DBus.Properties',
+                                                         'Get', 'ss', 'cockpit.Test', 'Answer')
             self.assertEqual(reply, {"t": "i", "v": 42})
 
-            reply, = await self.client.call_method_async(None, '/test', 'org.freedesktop.DBus.Properties', 'GetAll', 's', 'cockpit.Test')
+            reply, = await self.client.call_method_async(None, '/test', 'org.freedesktop.DBus.Properties',
+                                                         'GetAll', 's', 'cockpit.Test')
             self.assertEqual(reply, {"Answer": {"t": "i", "v": 42}})
 
             signals = self.signals_queue()
@@ -104,14 +107,16 @@ class CommonTests:
             self.assertEqual(message.get_member(), "PropertiesChanged")
             (iface, props, invalid) = message.get_body()
             self.assertEqual(iface, "cockpit.Test")
-            self.assertEqual(props, { 'Answer': { 't': 'i', 'v': 54 } })
+            self.assertEqual(props, {'Answer': {'t': 'i', 'v': 54}})
             self.assertEqual(invalid, [])
         run_async(test())
 
     def test_method(self):
         async def test():
-            reply, = await self.client.call_method_async(None, '/test', 'cockpit.Test', 'Divide', 'ii', 1554, 37)
+            reply, = await self.client.call_method_async(None, '/test', 'cockpit.Test',
+                                                         'Divide', 'ii', 1554, 37)
             self.assertEqual(reply, 42)
+
         run_async(test())
 
     def test_method_throws(self):
@@ -122,8 +127,10 @@ class CommonTests:
 
     def test_async_method(self):
         async def test():
-            reply, = await self.client.call_method_async(None, '/test', 'cockpit.Test', 'DivideSlowly', 'ii', 1554, 37)
+            reply, = await self.client.call_method_async(None, '/test', 'cockpit.Test',
+                                                         'DivideSlowly', 'ii', 1554, 37)
             self.assertEqual(reply, 42)
+
         run_async(test())
 
     def test_async_method_throws(self):
@@ -154,6 +161,7 @@ class CommonTests:
             self.assertEqual(info, "noise")
 
         run_async(test())
+
 
 class TestAddress(CommonTests, unittest.TestCase):
     def setUp(self):
