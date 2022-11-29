@@ -140,6 +140,7 @@ sd.bus.register_methods([
     (instancemethod, negative_errno, 'call', [sd.bus_message_p, c_uint64, POINTER(sd.bus_error), POINTER(sd.bus_message_p)]),
     (instancemethod, negative_errno, 'call_async', [POINTER(sd.bus_slot), sd.bus_message_p, sd.bus_message_handler_t, c_void_p, c_uint64]),
     (instancemethod, negative_errno, 'flush', []),
+    (instancemethod, negative_errno, 'get_fd', []),
     (instancemethod, negative_errno, 'message_new', [POINTER(sd.bus_message_p), c_uint8]),
     (instancemethod, negative_errno, 'message_new_method_call', [POINTER(sd.bus_message_p), utf8, utf8, utf8, utf8]),
     (instancemethod, negative_errno, 'message_new_signal', [POINTER(sd.bus_message_p), utf8, utf8, utf8]),
