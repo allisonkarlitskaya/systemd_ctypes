@@ -124,6 +124,8 @@ sd.bus_message.register_methods([
     (instancemethod, negative_errno, 'rewind', [boolint]),
     (instancemethod, negative_errno, 'seal', [c_uint64, c_uint64]),
     (instancemethod, sd.bus_p, 'get_bus', []),
+    (instancemethod, c_int, 'get_type', [POINTER(c_uint8)]),
+    (instancemethod, utf8, 'get_sender', []),
     (instancemethod, utf8, 'get_destination', []),
     (instancemethod, utf8, 'get_interface', []),
     (instancemethod, utf8, 'get_member', []),
@@ -133,6 +135,7 @@ sd.bus_message.register_methods([
 ])
 
 sd.bus.register_methods([
+    (instancemethod, negative_errno, 'add_filter', [POINTER(sd.bus_slot), sd.bus_message_handler_t, c_void_p]),
     (instancemethod, negative_errno, 'add_match', [POINTER(sd.bus_slot), utf8, sd.bus_message_handler_t, c_void_p]),
     (instancemethod, negative_errno, 'add_match_async', [POINTER(sd.bus_slot), utf8, sd.bus_message_handler_t, sd.bus_message_handler_t, c_void_p]),
     (instancemethod, negative_errno, 'add_object', [POINTER(sd.bus_slot), utf8, sd.bus_message_handler_t, c_void_p]),

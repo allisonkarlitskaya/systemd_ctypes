@@ -3,7 +3,7 @@ import socket
 import unittest
 from tempfile import TemporaryDirectory
 
-from systemd_ctypes import bus, introspection, run_async, BusError
+from systemd_ctypes import bus, introspection, run_async, BusError, MessageType
 
 
 class CommonTests:
@@ -206,6 +206,40 @@ class CommonTests:
                 await self.client.call_method_async(None, '/test', 'cockpit.Test', 'Divide', 'ii', 1554, 37)
         run_async(test())
 
+    def test_filter(self):
+        async def test():
+            # HACK - https://github.com/systemd/systemd/pull/24875
+            #
+            # Without this initial pointless method call, the signal
+            # below will not be received.
+            #
+            reply, = await self.client.call_method_async(None, '/test', 'org.freedesktop.DBus.Properties', 'Get',
+                                                         'ss', 'cockpit.Test', 'Answer')
+
+            filter_called = False
+
+            def filter(message):
+                nonlocal filter_called
+                filter_called = True
+                self.assertEqual(message.get_type(), MessageType.SIGNAL)
+                self.assertEqual(message.get_sender(), None)
+                self.assertEqual(message.get_path(), "/test")
+                self.assertEqual(message.get_interface(), "cockpit.Test")
+                self.assertEqual(message.get_member(), "EverythingChanged")
+                (level, info) = message.get_body()
+                self.assertEqual(level, 11)
+                self.assertEqual(info, "noise")
+
+            filter_slot = self.client.add_filter(filter)
+
+            signals = self.signals_queue()
+            self.test_object.everything_changed(11, 'noise')
+            message = await signals.get()
+
+            self.assertTrue(filter_called)
+            self.assertTrue(filter_slot)
+
+        run_async(test())
 
 class TestAddress(CommonTests, unittest.TestCase):
     def setUp(self):

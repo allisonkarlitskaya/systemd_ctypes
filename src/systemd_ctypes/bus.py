@@ -20,8 +20,9 @@ import base64
 import functools
 import itertools
 import logging
-from ctypes import c_char, byref
+from ctypes import c_char, c_uint8, byref
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple
+from enum import Enum
 
 from . import introspection
 from .librarywrapper import utf8
@@ -47,6 +48,14 @@ class BusError(Exception):
         self.message = message
 
 
+class MessageType(Enum):
+    INVALID = 0
+    CALL = 1
+    RETURN = 2
+    ERROR = 3
+    SIGNAL = 4
+
+
 class BusMessage(sd.bus_message):
     """A message, received from or to be sent over D-Bus
 
@@ -68,6 +77,11 @@ class BusMessage(sd.bus_message):
         :returns: the Bus
         """
         return Bus.ref(super().get_bus())
+
+    def get_type(self) -> MessageType:
+        tc = c_uint8()
+        super().get_type(byref(tc))
+        return MessageType(tc.value)
 
     def get_error(self) -> Optional[BusError]:
         """Get the BusError from a message.
@@ -382,6 +396,11 @@ class Bus(sd.bus):
         message = self.message_new_method_call(destination, path, interface, member, types, *args)
         message = await self.call_async(message, timeout)
         return message.get_body()
+
+    def add_filter(self, handler):
+        slot = Slot(handler)
+        super().add_filter(byref(slot), slot.callback, slot.userdata)
+        return slot
 
     def add_match(self, rule, handler):
         slot = Slot(handler)
