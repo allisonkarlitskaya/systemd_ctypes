@@ -188,6 +188,7 @@ class CommonTests:
             self.test_object.everything_changed(11, 'noise')
             message = await signals.get()
 
+            self.assertEqual(message.get_sender(), None)
             self.assertEqual(message.get_path(), "/test")
             self.assertEqual(message.get_interface(), "cockpit.Test")
             self.assertEqual(message.get_member(), "EverythingChanged")
