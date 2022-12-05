@@ -21,7 +21,7 @@ __version__ = "0"
 
 from .bus import Bus, BusError, BusMessage
 from .event import Event, EventLoopPolicy, run_async
-from .pathwatch import PathWatch
+from .pathwatch import Handle, PathWatch
 
 __all__ = [
         "Bus",
@@ -29,6 +29,7 @@ __all__ = [
         "BusMessage",
         "Event",
         "EventLoopPolicy",
+        "Handle",
         "PathWatch",
         "run_async",
 ]
