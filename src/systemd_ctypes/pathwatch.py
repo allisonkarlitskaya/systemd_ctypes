@@ -92,7 +92,8 @@ class Handle(int):
         return os.path.sameopenfile(self, value)
 
     def __del__(self):
-        assert not self._needs_close, f"You forgot to close fd {self}"
+        if self._needs_close:
+            self.close()
 
     def __enter__(self):
         return self
