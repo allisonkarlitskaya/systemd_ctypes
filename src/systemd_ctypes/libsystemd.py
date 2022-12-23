@@ -124,7 +124,6 @@ sd.bus_message.register_methods([
     (instancemethod, negative_errno, 'rewind', [boolint]),
     (instancemethod, negative_errno, 'seal', [c_uint64, c_uint64]),
     (instancemethod, sd.bus_p, 'get_bus', []),
-    (instancemethod, utf8, 'get_sender', []),
     (instancemethod, utf8, 'get_destination', []),
     (instancemethod, utf8, 'get_interface', []),
     (instancemethod, utf8, 'get_member', []),
