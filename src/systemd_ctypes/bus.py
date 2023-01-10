@@ -153,7 +153,7 @@ class BusMessage(sd.bus_message):
         :args: one argument for each type string in the signature
         """
         infos = parse_signature(signature)
-        assert len(infos) == len(args)
+        assert len(infos) == len(args), f'call args {args} have different length than signature {infos}'
         for info, arg in zip(infos, args):
             self._append_with_info(info, arg)
 

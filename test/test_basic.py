@@ -202,6 +202,20 @@ class TestAPI(dbusmock.DBusTestCase):
                 'Do is not a valid method of interface org.freedesktop.Test.Main'):
             self.async_call(message).get_body()
 
+    def test_call_signature_mismatch(self):
+        self.add_method('', 'Inc', 'i', 'i', 'ret = args[0] + 1')
+        # specified signature does not match server, but locally consistent args
+        with self.assertRaisesRegex(systemd_ctypes.BusError, 'InvalidArgs.*Fewer items.*signature.*arguments'):
+            self.bus_user.call_method(*TEST_ADDR, 'Inc', 'ii', 1, 2)
+        with self.assertRaisesRegex(systemd_ctypes.BusError, 'InvalidArgs'):
+            self.bus_user.call_method(*TEST_ADDR, 'Inc', 's', 'hello.*dbus.String.*integer')
+
+        # specified signature does not match arguments
+        with self.assertRaisesRegex(AssertionError, r'call args \(1, 2\) have different length than signature.*'):
+            self.bus_user.call_method(*TEST_ADDR, 'Inc', 'i', 1, 2)
+        with self.assertRaisesRegex(TypeError, r'.*str.* as.* integer|int.*str'):
+            self.bus_user.call_method(*TEST_ADDR, 'Inc', 'i', 'hello')
+
     def test_custom_error(self):
         self.add_method('', 'Boom', '', '', 'raise dbus.exceptions.DBusException("no good", name="com.example.Error.NoGood")')
         with self.assertRaisesRegex(systemd_ctypes.BusError, 'no good'):
