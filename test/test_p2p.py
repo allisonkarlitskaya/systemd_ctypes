@@ -10,6 +10,18 @@ class CommonTests:
     def setUp(self):
         class cockpit_Test(bus.Object):
             answer = bus.Interface.Property('i', value=42)
+            level = bus.Interface.Property('u')
+
+            def __init__(self):
+                self._level = 0
+
+            @level.getter
+            def get_level(self):
+                return self._level
+
+            @level.setter
+            def set_level(self, value):
+                self._level = value
 
             @bus.Interface.Method('i', 'ii')
             def divide(self, top, bottom):
@@ -101,6 +113,7 @@ class CommonTests:
                     },
                     'properties': {
                         'Answer': {'type': 'i', 'flags': 'r'},
+                        'Level': {'type': 'u', 'flags': 'w'},
                     },
                     'signals': {
                         'EverythingChanged': {'in': ['i', 's']},
@@ -117,7 +130,7 @@ class CommonTests:
 
             reply, = await self.client.call_method_async(None, '/test', 'org.freedesktop.DBus.Properties',
                                                          'GetAll', 's', 'cockpit.Test')
-            self.assertEqual(reply, {"Answer": {"t": "i", "v": 42}})
+            self.assertEqual(reply, {"Answer": {"t": "i", "v": 42}, "Level": {"t": "u", "v": 0}})
 
             signals = self.signals_queue()
             self.test_object.answer = 6 * 9
@@ -130,6 +143,15 @@ class CommonTests:
             self.assertEqual(iface, "cockpit.Test")
             self.assertEqual(props, {'Answer': {'t': 'i', 'v': 54}})
             self.assertEqual(invalid, [])
+
+            reply, = await self.client.call_method_async(None, '/test', 'org.freedesktop.DBus.Properties', 'Get',
+                                                         'ss', 'cockpit.Test', 'Level')
+            self.assertEqual(reply, {'t': 'u', 'v': 0})
+            await self.client.call_method_async(None, '/test', 'org.freedesktop.DBus.Properties', 'Set',
+                                                'ssv', 'cockpit.Test', 'Level', {'t': 'u', 'v': 12})
+            reply, = await self.client.call_method_async(None, '/test', 'org.freedesktop.DBus.Properties', 'Get',
+                                                         'ss', 'cockpit.Test', 'Level')
+            self.assertEqual(reply, {'t': 'u', 'v': 12})
         run_async(test())
 
     def test_method(self):
