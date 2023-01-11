@@ -621,6 +621,7 @@ class Interface:
                 def get_counter(self):
                     return self._counter
 
+                @counter.setter
                 def set_counter(self, value):
                     self._counter = value
                     self.property_changed('Counter')
