@@ -1,5 +1,6 @@
 import asyncio
 import socket
+import pytest
 import unittest
 from tempfile import TemporaryDirectory
 
@@ -194,6 +195,16 @@ class CommonTests:
         async def test():
             with self.assertRaisesRegex(BusError, 'cockpit.Error.ZeroDivisionError: Divide by zero'):
                 await self.client.call_method_async(None, '/test', 'cockpit.Test', 'DivideSlowly', 'ii', 1554, 0)
+        run_async(test())
+
+    @pytest.mark.filterwarnings('error')
+    def test_cancel_async_method(self):
+        async def test():
+            pending = self.client.call_method_async(None, '/test', 'cockpit.Test', 'DivideSlowly', 'ii', 1554, 37)
+            task = asyncio.create_task(pending)
+            await asyncio.sleep(0)  # let the call start running
+            task.cancel()
+            await asyncio.sleep(0.5)  # wait for the error to throw on method completion
         run_async(test())
 
     def test_signal(self):
