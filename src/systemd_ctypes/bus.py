@@ -292,6 +292,8 @@ class PendingCall(Slot):
 
         def done(message):
             error = message.get_error()
+            if future.cancelled():
+                return True
             if error is not None:
                 future.set_exception(error)
             else:
