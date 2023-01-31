@@ -25,7 +25,7 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 from . import introspection
 from .librarywrapper import utf8
-from .libsystemd import sd
+from .libsystemd import sd, signature_is_valid
 from .signature import parse_signature, parse_typestring
 
 logger = logging.getLogger(__name__)
@@ -120,12 +120,20 @@ class BusMessage(sd.bus_message):
 
         # Support base64 encoding of binary blobs
         if category == 'a' and contents == 'y' and isinstance(value, str):
-            value = base64.b64decode(value)
+            try:
+                value = base64.b64decode(value)
+            except:
+                raise TypeError("Invalid base64 in argument")
 
         # Variants
         if category == 'v':
-            self.open_container(ord(category), value['t'])
-            self._append_with_info(parse_typestring(value['t']), value['v'])
+            try:
+                t = value['t']
+                v = value['v']
+            except (TypeError, KeyError):
+                raise TypeError(f"Invalid value for variant: {repr(value)}")
+            self.open_container(ord(category), t)
+            self._append_with_info(parse_typestring(t), v)
             self.close_container()
             return
 
@@ -342,6 +350,18 @@ class Bus(sd.bus):
             if attach_event:
                 Bus._default_user.attach_event(None, 0)
         return Bus._default_user
+
+    @staticmethod
+    def object_path_is_valid(str):
+        return sd.bus.object_path_is_valid(str) != 0
+
+    @staticmethod
+    def interface_name_is_valid(str):
+        return sd.bus.interface_name_is_valid(str) != 0
+
+    @staticmethod
+    def signature_is_valid(str):
+        return signature_is_valid(str)
 
     def message_new_method_call(self, destination, path, interface, member, types='', *args):
         message = BusMessage()

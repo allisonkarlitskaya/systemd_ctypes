@@ -26,7 +26,7 @@ from ctypes import Structure, byref, \
 
 from .inotify import inotify_event
 from .librarywrapper import librarywrapper, utf8, negative_errno, instancemethod, boolint
-
+from .signature import parse_signature
 
 class sd(librarywrapper):
     namespace = 'sd'
@@ -86,10 +86,31 @@ sd.event.register_methods([
     (staticmethod, negative_errno, 'default', [POINTER(sd.event_p)]),
 ])
 
+def signature_is_valid(str):
+    try:
+        parse_signature(str)
+        return True
+    except TypeError:
+        return False
+
+class utf8_object_path(utf8):
+    def __init__(self, value=None):
+        super().__init__(value)
+        if self.value is not None:
+            if sd.bus.object_path_is_valid(self.value) == 0:
+                raise TypeError
+
+class utf8_signature(utf8):
+    def __init__(self, value=None):
+        super().__init__(value)
+        if self.value is not None:
+            if not signature_is_valid(self.value):
+                raise TypeError
+
 BASIC_TYPE_MAP = {
     'y': c_uint8, 'b': boolint,
     'n': c_int16, 'q': c_uint16, 'i': c_int32, 'u': c_uint32, 'x': c_int64, 't': c_uint64,
-    'd': c_double, 's': utf8, 'o': utf8, 'g': utf8,
+    'd': c_double, 's': utf8, 'o': utf8_object_path, 'g': utf8_signature,
 }
 
 # Typesafe wrapper for functions that require the third argument to correspond
@@ -97,7 +118,12 @@ BASIC_TYPE_MAP = {
 # Raises KeyError in case the type character is not supported.
 def basic_type_in(func):
     def wrapper(self, char, value):
-        box = BASIC_TYPE_MAP[char](value)
+        try:
+            box = BASIC_TYPE_MAP[char](value)
+        except TypeError:
+            raise TypeError(f"Invalid value for signature '{char}': {repr(value)}")
+        if box.value != value:
+            raise TypeError(f"Value out of range for signature '{char}': {repr(value)}")
         func(self, ord(char), box if isinstance(box, utf8) else byref(box))
     return wrapper
 def basic_type_out(func):
@@ -155,4 +181,7 @@ sd.bus.register_methods([
     (staticmethod, negative_errno, 'default_system', [POINTER(sd.bus_p)]),
     (staticmethod, negative_errno, 'default_user', [POINTER(sd.bus_p)]),
     (staticmethod, negative_errno, 'new', [POINTER(sd.bus_p)]),
+    (staticmethod, c_int, 'object_path_is_valid', [utf8]),
+    (staticmethod, c_int, 'interface_name_is_valid', [utf8]),
+    (staticmethod, c_int, 'member_name_is_valid', [utf8]),
 ])

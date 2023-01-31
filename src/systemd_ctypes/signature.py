@@ -36,6 +36,8 @@ def consume_one(signature, start):
         end, childinfo = consume_multiple(signature, start + 1, '}')
         typeinfo = ('e', signature[start + 1: end - 1], childinfo)
     else:
+        if first not in "ybnqiuxtdsogv":
+            raise TypeError(f"Invalid signature '{signature}': '{first}' is not a basic type")
         end = start + 1
         typeinfo = (first, first, None)
 
