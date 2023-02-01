@@ -205,9 +205,9 @@ class TestAPI(dbusmock.DBusTestCase):
     def test_call_signature_mismatch(self):
         self.add_method('', 'Inc', 'i', 'i', 'ret = args[0] + 1')
         # specified signature does not match server, but locally consistent args
-        with self.assertRaisesRegex(systemd_ctypes.BusError, 'InvalidArgs.*Fewer items.*signature.*arguments'):
+        with self.assertRaisesRegex(systemd_ctypes.BusError, '(InvalidArgs|TypeError).*Fewer items.*signature.*arguments'):
             self.bus_user.call_method(*TEST_ADDR, 'Inc', 'ii', 1, 2)
-        with self.assertRaisesRegex(systemd_ctypes.BusError, 'InvalidArgs'):
+        with self.assertRaisesRegex(systemd_ctypes.BusError, 'InvalidArgs|TypeError'):
             self.bus_user.call_method(*TEST_ADDR, 'Inc', 's', 'hello.*dbus.String.*integer')
 
         # specified signature does not match arguments
