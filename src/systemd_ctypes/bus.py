@@ -292,8 +292,6 @@ class PendingCall(Slot):
 
         def done(message):
             error = message.get_error()
-            if future.cancelled():
-                return True
             if error is not None:
                 future.set_exception(error)
             else:
@@ -374,9 +372,13 @@ class Bus(sd.bus):
         return message.get_body()
 
     async def call_async(self, message, timeout=None):
-        pending = PendingCall()
-        super().call_async(pending, message, pending.callback, pending.userdata, timeout or 0)
-        return await pending.future
+        try:
+            pending = PendingCall()
+            super().call_async(pending, message, pending.callback, pending.userdata, timeout or 0)
+            return await pending.future
+        finally:
+            # Explicitly cancel the Slot: useful if our task was cancelled
+            pending.cancel()
 
     async def call_method_async(self, destination, path, interface, member, types='', *args, timeout=None):
         logger.debug('Doing async method call %s %s %s %s %s %s',
