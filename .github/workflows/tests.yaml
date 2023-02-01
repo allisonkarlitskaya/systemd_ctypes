@@ -16,6 +16,7 @@ jobs:
           - docker.io/ubuntu:latest
           - registry.fedoraproject.org/fedora:rawhide
           - quay.io/centos/centos:stream8
+          - quay.io/centos/centos:stream9
 
     container:
       image: ${{ matrix.container }}
@@ -33,9 +34,11 @@ jobs:
                   libsystemd0 \
                   python3-dbusmock \
                   tox
-          elif grep -q platform:el8 /etc/os-release; then
+          elif grep -q platform:el /etc/os-release; then
               dnf install -y \
                   python3-pip \
+                  python3-dbus \
+                  dbus-daemon \
                   systemd-libs
               pip3 install \
                   tox
