@@ -11,6 +11,9 @@ jobs:
       matrix:
         container:
           - docker.io/debian:unstable
+          - docker.io/ubuntu:devel
+          - docker.io/ubuntu:rolling
+          - docker.io/ubuntu:latest
           - registry.fedoraproject.org/fedora:rawhide
           - quay.io/centos/centos:stream8
 
