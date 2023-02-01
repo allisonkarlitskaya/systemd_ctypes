@@ -12,6 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         container:
+          - docker.io/debian:stable
           - docker.io/debian:unstable
           - docker.io/ubuntu:devel
           - docker.io/ubuntu:rolling
