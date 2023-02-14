@@ -18,4 +18,4 @@ Check the [examples](./examples/) and [tests](./test) for how to use systemd_cty
 
 This project originated as a weekend hack to support the efforts to write a portable Python version of [`cockpit-bridge`](https://cockpit-project.org/guide/latest/cockpit-bridge.1.html).
 
-Run tests with [`tox`](https://tox.wiki/).
+Run tests with [`pytest`](https://pypi.org/project/pytest/) or [`tox`](https://tox.wiki/).
