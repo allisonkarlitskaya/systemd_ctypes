@@ -17,6 +17,7 @@
 
 import asyncio
 import base64
+import enum
 import functools
 import itertools
 import logging
@@ -307,6 +308,12 @@ class PendingCall(Slot):
 class Bus(sd.bus):
     _default_system = None
     _default_user = None
+
+    class NameFlags(enum.IntFlag):
+        DEFAULT = 0
+        REPLACE_EXISTING = 1 << 0
+        ALLOW_REPLACEMENT = 1 << 1
+        QUEUE = 1 << 2
 
     @staticmethod
     def new(fd=None, address=None, bus_client=False, server=False, start=True, attach_event=True):
