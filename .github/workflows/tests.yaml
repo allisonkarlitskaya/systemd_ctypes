@@ -48,6 +48,7 @@ jobs:
           else
               dnf install -y \
                   python3-dbusmock \
+                  python3-flake8 \
                   systemd-libs \
                   tox
           fi
