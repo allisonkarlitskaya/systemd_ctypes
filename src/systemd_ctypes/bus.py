@@ -564,7 +564,6 @@ class Interface:
         except KeyError as exc:
             raise Object.Method.Unhandled from exc
 
-
     class _Member:
         _category: str  # filled in from subclasses
 
@@ -593,7 +592,6 @@ class Interface:
             # Acts as an adaptor for dict accesses from introspection.to_xml()
             assert self._description is not None
             return self._description[key]
-
 
     class Property(_Member):
         """Defines a D-Bus property on an interface
@@ -719,7 +717,6 @@ class Interface:
         def setter(self, setter: Callable[[Any, Any], None]) -> Callable[[Any, Any], None]:
             self._setter = setter
             return setter
-
 
     class Signal(_Member):
         """Defines a D-Bus signal on an interface
