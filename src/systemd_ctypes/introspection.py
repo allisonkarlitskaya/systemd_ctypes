@@ -17,6 +17,7 @@
 
 import xml.etree.ElementTree as ET
 
+
 def parse_method(method):
     return {
         "in": [tag.attrib['type'] for tag in method.findall("arg") if tag.get('direction', 'in') == 'in'],
@@ -30,8 +31,10 @@ def parse_property(prop):
         "type": prop.attrib['type']
     }
 
+
 def parse_signal(signal):
     return {"in": [tag.attrib['type'] for tag in signal.findall("arg")]}
+
 
 def parse_interface(interface):
     return {
@@ -39,6 +42,7 @@ def parse_interface(interface):
         "properties": {tag.attrib['name']: parse_property(tag) for tag in interface.findall('property')},
         "signals": {tag.attrib['name']: parse_signal(tag) for tag in interface.findall('signal')}
     }
+
 
 def parse_xml(xml, interface_names=None):
     et = ET.fromstring(xml)
@@ -50,11 +54,13 @@ def parse_xml(xml, interface_names=None):
 
     return {tag.attrib['name']: parse_interface(tag) for tag in et.findall('interface') if predicate(tag)}
 
+
 # Pretend like this is a little bit functional
 def element(tag, children=(), **kwargs):
     tag = ET.Element(tag, kwargs)
     tag.extend(children)
     return tag
+
 
 def method(name, method_info):
     return element('method', name=name,
@@ -64,16 +70,19 @@ def method(name, method_info):
                            for arg_type in method_info[direction]
                    ])
 
+
 def property(name, property_info):
     return element('property', name=name,
                    access='write' if property_info['flags'] == 'w' else 'read',
                    type=property_info['type'])
+
 
 def signal(name, signal_info):
     return element('signal', name=name,
                    children=[
                        element('arg', type=arg_type) for arg_type in signal_info['in']
                    ])
+
 
 def interface(name, interface_info):
     return element('interface', name=name,
@@ -82,6 +91,7 @@ def interface(name, interface_info):
                        *(property(name, info) for name, info in interface_info['properties'].items()),
                        *(signal(name, info) for name, info in interface_info['signals'].items()),
                    ])
+
 
 def to_xml(interfaces):
     node = element('node', children=(interface(name, members) for name, members in interfaces.items()))

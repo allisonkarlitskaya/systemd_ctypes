@@ -49,10 +49,10 @@ class TestAPI(dbusmock.DBusTestCase):
 
     def async_call(self, message):
         result = None
+
         async def _call():
             nonlocal result
             result = await self.bus_user.call_async(message)
-
 
         systemd_ctypes.event.run_async(_call())
 

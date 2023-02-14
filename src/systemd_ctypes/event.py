@@ -46,7 +46,6 @@ class Event(sd.event):
         super().add_inotify(byref(source), path, mask, source.wrapper, None)
         return source
 
-
     def add_inotify_fd(self, fd, mask, handler):
         # HACK: sd_event_add_inotify_fd() got added in 250, which is too new.  Fake it.
         return self.add_inotify(f'/proc/self/fd/{fd}', mask, handler)

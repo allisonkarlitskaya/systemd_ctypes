@@ -92,6 +92,7 @@ BASIC_TYPE_MAP = {
     'd': c_double, 's': utf8, 'o': utf8, 'g': utf8,
 }
 
+
 # Typesafe wrapper for functions that require the third argument to correspond
 # to the type specified by the character given as the second argument.
 # Raises KeyError in case the type character is not supported.
@@ -100,12 +101,15 @@ def basic_type_in(func):
         box = BASIC_TYPE_MAP[char](value)
         func(self, ord(char), box if isinstance(box, utf8) else byref(box))
     return wrapper
+
+
 def basic_type_out(func):
     def wrapper(self, char):
         box = BASIC_TYPE_MAP[char]()
         func(self, ord(char), byref(box))
         return box.value
     return wrapper
+
 
 sd.bus_message.register_methods([
     (basic_type_in, negative_errno, 'append_basic', [sd.bus_message_p, c_char, c_void_p]),

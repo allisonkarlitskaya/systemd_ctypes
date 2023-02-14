@@ -57,6 +57,7 @@ class boolint(ctypes.c_int):
 
 def instancemethod(func):
     func.argtypes = [ctypes.c_void_p, *func.argtypes]
+
     def wrapper(*args):
         return func(*args)
     return wrapper

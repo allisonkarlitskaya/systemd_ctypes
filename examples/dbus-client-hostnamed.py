@@ -35,7 +35,6 @@ async def main():
                               'Introspect')
     print(introspection.parse_xml(xml))
 
-
     items, = await system.call_method_async('org.freedesktop.hostname1',
                                             '/org/freedesktop/hostname1',
                                             'org.freedesktop.DBus.Properties',
