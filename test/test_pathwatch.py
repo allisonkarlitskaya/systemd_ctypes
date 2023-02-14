@@ -106,7 +106,8 @@ class TestPathWatch(unittest.TestCase):
         self.assertEqual(listener.do_inotify_event.call_args_list[-2][0][2], b'dirlink')
         listener.do_inotify_event.assert_called_with(Event.MOVED_TO, inode, b'pointer')
 
-    # on systemd 239 on RHEL 8: Assertion 'sz <= d->buffer_filled' failed at ../src/libsystemd/sd-event/sd-event.c:3185, function event_inotify_data_drop().
+    # on systemd 239 on RHEL 8: Assertion 'sz <= d->buffer_filled' failed at
+    # ../src/libsystemd/sd-event/sd-event.c:3185, function event_inotify_data_drop().
     @unittest.skipIf('PLATFORM_ID="platform:el8"' in os_release, 'crashes on RHEL 8 systemd')
     @unittest.skipIf('Focal Fossa' in os_release, 'crashes on Ubuntu 20.04')
     @unittest.skipIf('bullseye' in os_release, 'crashes on Debian 11')

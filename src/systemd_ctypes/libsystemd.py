@@ -76,7 +76,8 @@ sd.bus_message_handler_t = CFUNCTYPE(c_int, sd.bus_message_p, c_void_p, POINTER(
 sd.event_inotify_handler_t = CFUNCTYPE(c_int, sd.event_source_p, POINTER(inotify_event), c_void_p)
 
 sd.event.register_methods([
-    (instancemethod, negative_errno, 'add_inotify', [POINTER(sd.event_source), utf8, c_uint32, sd.event_inotify_handler_t, c_void_p]),
+    (instancemethod, negative_errno, 'add_inotify',
+     [POINTER(sd.event_source), utf8, c_uint32, sd.event_inotify_handler_t, c_void_p]),
     (instancemethod, negative_errno, 'dispatch', []),
     (instancemethod, negative_errno, 'get_fd', []),
     (instancemethod, negative_errno, 'get_state', []),
@@ -138,11 +139,14 @@ sd.bus_message.register_methods([
 
 sd.bus.register_methods([
     (instancemethod, negative_errno, 'add_match', [POINTER(sd.bus_slot), utf8, sd.bus_message_handler_t, c_void_p]),
-    (instancemethod, negative_errno, 'add_match_async', [POINTER(sd.bus_slot), utf8, sd.bus_message_handler_t, sd.bus_message_handler_t, c_void_p]),
+    (instancemethod, negative_errno, 'add_match_async',
+     [POINTER(sd.bus_slot), utf8, sd.bus_message_handler_t, sd.bus_message_handler_t, c_void_p]),
     (instancemethod, negative_errno, 'add_object', [POINTER(sd.bus_slot), utf8, sd.bus_message_handler_t, c_void_p]),
     (instancemethod, negative_errno, 'attach_event', [sd.event_p, c_int]),
-    (instancemethod, negative_errno, 'call', [sd.bus_message_p, c_uint64, POINTER(sd.bus_error), POINTER(sd.bus_message_p)]),
-    (instancemethod, negative_errno, 'call_async', [POINTER(sd.bus_slot), sd.bus_message_p, sd.bus_message_handler_t, c_void_p, c_uint64]),
+    (instancemethod, negative_errno, 'call',
+     [sd.bus_message_p, c_uint64, POINTER(sd.bus_error), POINTER(sd.bus_message_p)]),
+    (instancemethod, negative_errno, 'call_async',
+     [POINTER(sd.bus_slot), sd.bus_message_p, sd.bus_message_handler_t, c_void_p, c_uint64]),
     (instancemethod, negative_errno, 'flush', []),
     (instancemethod, negative_errno, 'get_fd', []),
     (instancemethod, negative_errno, 'message_new', [POINTER(sd.bus_message_p), c_uint8]),

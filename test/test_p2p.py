@@ -236,7 +236,8 @@ class CommonTests:
             # Make sure that dropping the slot results in the object being un-exported
             self.test_object_slot = None
 
-            with self.assertRaisesRegex(BusError, "org.freedesktop.DBus.Error.UnknownObject: Unknown object '/test'."):
+            with self.assertRaisesRegex(
+                    BusError, "org.freedesktop.DBus.Error.UnknownObject: Unknown object '/test'."):
                 await self.client.call_method_async(None, '/test', 'cockpit.Test', 'Divide', 'ii', 1554, 37)
         run_async(test())
 
