@@ -44,10 +44,10 @@ Event = enum.IntFlag('inotify.Event', [
     'ONLYDIR', 'DONT_FOLLOW', 'EXCL_UNLINK', '_unused_0x8000000',
     'MASK_CREATE', 'MASK_ADD', 'ISDIR', 'ONESHOE'
 
-    ])
+])
 Event.CLOSE = Event.CLOSE_WRITE | Event.CLOSE_NOWRITE
 Event.MOVE = Event.MOVED_FROM | Event.MOVED_TO
 
 # non-standard.  All "change" events (ie: excluding read-only events)
-Event.CHANGED = Event.MODIFY | Event.ATTRIB | Event.CLOSE_WRITE | Event.MOVE | \
-                Event.CREATE | Event.DELETE | Event.DELETE_SELF | Event.MOVE_SELF
+Event.CHANGED = (Event.MODIFY | Event.ATTRIB | Event.CLOSE_WRITE | Event.MOVE |
+                 Event.CREATE | Event.DELETE | Event.DELETE_SELF | Event.MOVE_SELF)

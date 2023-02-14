@@ -366,7 +366,7 @@ class Bus(sd.bus):
 
     def call_method(self, destination, path, interface, member, types='', *args, timeout=None):
         logger.debug('Doing sync method call %s %s %s %s %s %s',
-                destination, path, interface, member, types, args)
+                     destination, path, interface, member, types, args)
         message = self.message_new_method_call(destination, path, interface, member, types, *args)
         message = self.call(message, timeout)
         return message.get_body()
@@ -382,7 +382,7 @@ class Bus(sd.bus):
 
     async def call_method_async(self, destination, path, interface, member, types='', *args, timeout=None):
         logger.debug('Doing async method call %s %s %s %s %s %s',
-                destination, path, interface, member, types, args)
+                     destination, path, interface, member, types, args)
         message = self.message_new_method_call(destination, path, interface, member, types, *args)
         message = await self.call_async(message, timeout)
         return message.get_body()

@@ -66,8 +66,8 @@ def method(name, method_info):
     return element('method', name=name,
                    children=[
                        element('arg', type=arg_type, direction=direction)
-                           for direction in ['in', 'out']
-                           for arg_type in method_info[direction]
+                       for direction in ['in', 'out']
+                       for arg_type in method_info[direction]
                    ])
 
 
@@ -86,7 +86,7 @@ def signal(name, signal_info):
 
 def interface(name, interface_info):
     return element('interface', name=name,
-                   children = [
+                   children=[
                        *(method(name, info) for name, info in interface_info['methods'].items()),
                        *(property(name, info) for name, info in interface_info['properties'].items()),
                        *(signal(name, info) for name, info in interface_info['signals'].items()),

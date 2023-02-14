@@ -62,11 +62,11 @@ class TestAPI(dbusmock.DBusTestCase):
         args = [
             ('i', 1234),
             ('s', 'Hello World'),
-            ('v', { 't': 's', 'v': 'Hi!' } ),
-            ('v', { 't': 'i', 'v': 5678 } ),
-            ('ai', [ 1, 2, 3, 5 ]),
+            ('v', {'t': 's', 'v': 'Hi!'}),
+            ('v', {'t': 'i', 'v': 5678}),
+            ('ai', [1, 2, 3, 5]),
             ('a{s(ii)}', {'start': (3, 4), 'end': (6, 7)}),
-            ('a{sv}', {'one': { 't': 's', 'v': "Hello" }, 'two': { 't': 't', 'v': 1234567890 } }),
+            ('a{sv}', {'one': {'t': 's', 'v': "Hello"}, 'two': {'t': 't', 'v': 1234567890}}),
         ]
         signature = ''.join(typestring for typestring, value in args)
         values = tuple(value for typestring, value in args)
@@ -193,13 +193,13 @@ class TestAPI(dbusmock.DBusTestCase):
 
     def test_unknown_method_sync(self):
         with self.assertRaisesRegex(systemd_ctypes.BusError, '.*org.freedesktop.DBus.Error.UnknownMethod:.*'
-                'Do is not a valid method of interface org.freedesktop.Test.Main'):
+                                    'Do is not a valid method of interface org.freedesktop.Test.Main'):
             self.bus_user.call_method(*TEST_ADDR, 'Do')
 
     def test_unknown_method_async(self):
         message = self.bus_user.message_new_method_call(*TEST_ADDR, 'Do')
         with self.assertRaisesRegex(systemd_ctypes.BusError, '.*org.freedesktop.DBus.Error.UnknownMethod:.*'
-                'Do is not a valid method of interface org.freedesktop.Test.Main'):
+                                    'Do is not a valid method of interface org.freedesktop.Test.Main'):
             self.async_call(message).get_body()
 
     def test_call_signature_mismatch(self):
@@ -226,9 +226,9 @@ class TestAPI(dbusmock.DBusTestCase):
         xml, = self.bus_user.call_method(TEST_ADDR[0], '/', 'org.freedesktop.DBus.Introspectable', 'Introspect')
         parsed = introspection.parse_xml(xml)
         expected = {
-                'methods': {'Do': {'in': ['s', 'ai', 'v'], 'out': ['i']}},
-                'properties': {},
-                'signals': {}
+            'methods': {'Do': {'in': ['s', 'ai', 'v'], 'out': ['i']}},
+            'properties': {},
+            'signals': {}
         }
         self.assertEqual(parsed['org.freedesktop.Test.Main'], expected)
 
