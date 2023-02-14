@@ -24,12 +24,12 @@ from .event import Event, EventLoopPolicy, run_async
 from .pathwatch import Handle, PathWatch
 
 __all__ = [
-        "Bus",
-        "BusError",
-        "BusMessage",
-        "Event",
-        "EventLoopPolicy",
-        "Handle",
-        "PathWatch",
-        "run_async",
+    "Bus",
+    "BusError",
+    "BusMessage",
+    "Event",
+    "EventLoopPolicy",
+    "Handle",
+    "PathWatch",
+    "run_async",
 ]
