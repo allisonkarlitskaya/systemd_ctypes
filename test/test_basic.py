@@ -20,10 +20,16 @@ import unittest
 
 import dbusmock
 import systemd_ctypes
-from systemd_ctypes import introspection
+from systemd_ctypes import introspection, bus
 
 
 TEST_ADDR = ('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main')
+
+
+class Test_Greeter(bus.Object):
+    @bus.Interface.Method('s', 's')
+    def say_hello(self, name):
+        return f'Hello {name}!'
 
 
 class TestAPI(dbusmock.DBusTestCase):
@@ -236,6 +242,46 @@ class TestAPI(dbusmock.DBusTestCase):
             'signals': {}
         }
         self.assertEqual(parsed['org.freedesktop.Test.Main'], expected)
+
+    def check_iface_sayhello(self, service_name):
+        message = self.bus_user.message_new_method_call(
+            service_name, '/', 'Test.Greeter',
+            'SayHello', 's', 'world')
+        self.assertEqual(self.async_call(message).get_body(), ('Hello world!',))
+
+    def test_service(self):
+        test_object = Test_Greeter()
+        test_slot = self.bus_user.add_object('/', test_object)
+        self.bus_user.request_name('com.example.Test', bus.Bus.NameFlags.DEFAULT)
+
+        self.check_iface_sayhello('com.example.Test')
+
+        self.bus_user.release_name('com.example.Test')
+        del test_slot
+
+    def test_service_replace(self):
+        test_object = Test_Greeter()
+        test_slot = self.bus_user.add_object('/', test_object)
+        self.bus_user.request_name(TEST_ADDR[0], bus.Bus.NameFlags.REPLACE_EXISTING)
+
+        self.check_iface_sayhello(TEST_ADDR[0])
+
+        self.bus_user.release_name(TEST_ADDR[0])
+        del test_slot
+
+    def test_request_name_errors(self):
+        # name already exists
+        self.assertRaises(FileExistsError, self.bus_user.request_name, TEST_ADDR[0], bus.Bus.NameFlags.DEFAULT)
+
+        # invalid name
+        self.assertRaisesRegex(OSError, '.*Invalid argument',
+                               self.bus_user.request_name, '', bus.Bus.NameFlags.DEFAULT)
+
+        # invalid flag
+        self.assertRaisesRegex(OSError, '.*Invalid argument', self.bus_user.request_name, TEST_ADDR[0], 0xFF)
+
+        # name not taken
+        self.assertRaises(ProcessLookupError, self.bus_user.release_name, 'com.example.NotThis')
 
 
 if __name__ == '__main__':
