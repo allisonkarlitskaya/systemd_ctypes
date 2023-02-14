@@ -236,7 +236,9 @@ class BusMessage(sd.bus_message):
         except BusError as exc:
             self.reply_method_error(exc)
 
-    def reply_method_function_return_value(self, out_types: Sequence[str], return_value: Any) -> bool:  # Literal[True]:
+    def reply_method_function_return_value(self,
+                                           out_types: Sequence[str],
+                                           return_value: Any) -> bool:  # Literal[True]:
         """Sends the result of a function call as a reply to a method call message.
 
         This call does a bit of magic: it adapts from the usual Python return
