@@ -14,6 +14,8 @@ The initial focus is on the [`sd_event`](https://www.freedesktop.org/software/sy
 
 There's a higher-level [`PathWatch`](systemd_ctypes/pathwatch.py) API to make it easier to use `inotify`.
 
+Check the [examples](./examples/) and [tests](./test) for how to use systemd_ctypes.
+
 This project originated as a weekend hack to support the efforts to write a portable Python version of [`cockpit-bridge`](https://cockpit-project.org/guide/latest/cockpit-bridge.1.html).
 
 Run tests with [`tox`](https://tox.wiki/).
