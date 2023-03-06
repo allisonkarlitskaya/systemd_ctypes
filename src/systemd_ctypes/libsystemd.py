@@ -18,11 +18,7 @@
 import os
 import sys
 
-from ctypes import Structure, byref, \
-    c_uint8, c_uint16, c_uint32, c_uint64, \
-    c_char, c_int, c_int16, c_int32, c_int64, \
-    c_double, c_void_p, \
-    CFUNCTYPE, POINTER
+from ctypes import CFUNCTYPE, Structure, POINTER, byref, c_char, c_int, c_uint8, c_uint32, c_uint64, c_void_p
 
 from .inotify import inotify_event
 from .librarywrapper import librarywrapper, utf8, negative_errno, instancemethod, boolint
@@ -87,34 +83,9 @@ sd.event.register_methods([
     (staticmethod, negative_errno, 'default', [POINTER(sd.event_p)]),
 ])
 
-BASIC_TYPE_MAP = {
-    'y': c_uint8, 'b': boolint,
-    'n': c_int16, 'q': c_uint16, 'i': c_int32, 'u': c_uint32, 'x': c_int64, 't': c_uint64,
-    'd': c_double, 's': utf8, 'o': utf8, 'g': utf8,
-}
-
-
-# Typesafe wrapper for functions that require the third argument to correspond
-# to the type specified by the character given as the second argument.
-# Raises KeyError in case the type character is not supported.
-def basic_type_in(func):
-    def wrapper(self, char, value):
-        box = BASIC_TYPE_MAP[char](value)
-        func(self, ord(char), box if isinstance(box, utf8) else byref(box))
-    return wrapper
-
-
-def basic_type_out(func):
-    def wrapper(self, char):
-        box = BASIC_TYPE_MAP[char]()
-        func(self, ord(char), byref(box))
-        return box.value
-    return wrapper
-
-
 sd.bus_message.register_methods([
-    (basic_type_in, negative_errno, 'append_basic', [sd.bus_message_p, c_char, c_void_p]),
-    (basic_type_out, negative_errno, 'read_basic', [sd.bus_message_p, c_char, c_void_p]),
+    (instancemethod, negative_errno, 'append_basic', [sd.bus_message_p, c_char, c_void_p]),
+    (instancemethod, negative_errno, 'read_basic', [sd.bus_message_p, c_char, c_void_p]),
     (instancemethod, POINTER(sd.bus_error), 'get_error', []),
     (instancemethod, negative_errno, 'at_end', [boolint]),
     (instancemethod, negative_errno, 'close_container', []),

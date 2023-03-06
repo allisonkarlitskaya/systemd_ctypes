@@ -16,18 +16,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import asyncio
-import base64
 import enum
 import functools
-import itertools
 import logging
-from ctypes import c_char, byref
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple
+from ctypes import byref
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from . import introspection
-from .librarywrapper import utf8
 from .libsystemd import sd
-from .signature import parse_signature, parse_typestring
+from . import bustypes
 
 logger = logging.getLogger(__name__)
 
@@ -109,43 +106,14 @@ class BusMessage(sd.bus_message):
         super().new_method_errorf(reply, error.name, "%s", error.message)
         return reply
 
-    def _append_with_info(self, typeinfo: tuple, value: Any) -> None:
-        category, contents, child_info = typeinfo
-
-        try:
-            # Basic types
-            self.append_basic(category, value)
-            return
-        except KeyError:
-            pass
-
-        # Support base64 encoding of binary blobs
-        if category == 'a' and contents == 'y' and isinstance(value, str):
-            value = base64.b64decode(value)
-
-        # Variants
-        if category == 'v':
-            self.open_container(ord(category), value['t'])
-            self._append_with_info(parse_typestring(value['t']), value['v'])
-            self.close_container()
-            return
-
-        # Other containers
-        child_info_iter = itertools.repeat(child_info) if category == 'a' else child_info
-        value_iter = value.items() if child_info[0] == 'e' else value
-
-        self.open_container(ord(category), contents)
-        for child_info, child in zip(child_info_iter, value_iter):
-            self._append_with_info(child_info, child)
-        self.close_container()
-
     def append_arg(self, typestring: str, arg: Any) -> None:
         """Append a single argument to the message.
 
         :typestring: a single typestring, such as 's', or 'a{sv}'
         :arg: the argument to append, matching the typestring
         """
-        self._append_with_info(parse_typestring(typestring), arg)
+        type_, = bustypes.from_signature(typestring)
+        type_.writer(self, arg)
 
     def append(self, signature: str, *args: Any) -> None:
         """Append zero or more arguments to the message.
@@ -153,40 +121,10 @@ class BusMessage(sd.bus_message):
         :signature: concatenated typestrings, such 'a{sv}' (one arg), or 'ss' (two args)
         :args: one argument for each type string in the signature
         """
-        infos = parse_signature(signature)
-        assert len(infos) == len(args), f'call args {args} have different length than signature {infos}'
-        for info, arg in zip(infos, args):
-            self._append_with_info(info, arg)
-
-    def _yield_values(self):
-        category_holder, contents_holder = c_char(), utf8()
-        while self.peek_type(byref(category_holder), byref(contents_holder)):
-            category, contents = chr(ord(category_holder.value)), contents_holder.value
-
-            try:
-                # Basic types
-                yield self.read_basic(category)
-                continue
-            except KeyError:
-                pass
-
-            # Containers
-            if category == 'a':
-                constructor = dict if contents.startswith('{') else list
-            elif category == 'v':
-                constructor = lambda i: {"t": contents, "v": next(i)}
-            else:
-                constructor = tuple
-
-            self.enter_container(ord(category), contents)
-            value = constructor(self._yield_values())
-            self.exit_container()
-
-            # base64 encode binary blobs
-            if category == 'a' and contents == 'y':
-                value = base64.b64encode(bytes(value)).decode('ascii')
-
-            yield value
+        types = bustypes.from_signature(signature)
+        assert len(types) == len(args), f'call args {args} have different length than signature {signature}'
+        for type_, arg in zip(types, args):
+            type_.writer(self, arg)
 
     def get_body(self) -> Tuple[Any, ...]:
         """Gets the body of a message.
@@ -202,7 +140,8 @@ class BusMessage(sd.bus_message):
         :returns: an n-tuple containing one value per argument in the message
         """
         self.rewind(True)
-        return tuple(self._yield_values())
+        types = bustypes.from_signature(self.get_signature(True))
+        return tuple(type_.reader(self) for type_ in types)
 
     def send(self) -> bool:  # Literal[True]
         """Sends a message on the bus that it was created for.
@@ -231,14 +170,14 @@ class BusMessage(sd.bus_message):
         """
         return self.new_method_return(signature, *args).send()
 
-    def _coroutine_task_complete(self, out_types: Sequence[str], task: asyncio.Task) -> None:
+    def _coroutine_task_complete(self, out_type: bustypes.MessageType, task: asyncio.Task) -> None:
         try:
-            self.reply_method_function_return_value(out_types, task.result())
+            self.reply_method_function_return_value(out_type, task.result())
         except BusError as exc:
             self.reply_method_error(exc)
 
     def reply_method_function_return_value(self,
-                                           out_types: Sequence[str],
+                                           out_type: bustypes.MessageType,
                                            return_value: Any) -> bool:  # Literal[True]:
         """Sends the result of a function call as a reply to a method call message.
 
@@ -258,22 +197,21 @@ class BusMessage(sd.bus_message):
         """
         if asyncio.coroutines.iscoroutine(return_value):
             task = asyncio.create_task(return_value)
-            task.add_done_callback(functools.partial(self._coroutine_task_complete, out_types))
+            task.add_done_callback(functools.partial(self._coroutine_task_complete, out_type))
             return True
 
         reply = self.new_method_return()
         # In the general case, a function returns an n-tuple, but...
-        if len(out_types) == 0:
+        if len(out_type) == 0:
             # Functions with no return value return None.
             assert return_value is None
-        elif len(out_types) == 1:
+        elif len(out_type) == 1:
             # Functions with a single return value return that value.
-            reply.append_arg(out_types[0], return_value)
+            out_type.write(reply, return_value)
         else:
             # (general case) n return values are handled as an n-tuple.
-            assert len(out_types) == len(return_value)
-            for out_type, value in zip(out_types, return_value):
-                reply.append_arg(out_type, value)
+            assert len(out_type) == len(return_value)
+            out_type.write(reply, *return_value)
         return reply.send()
 
 
@@ -659,7 +597,7 @@ class Interface:
 
         _getter: Optional[Callable[[Any], Any]]
         _setter: Optional[Callable[[Any, Any], None]]
-        _type_string: str
+        _type: bustypes.Type
         _value: Any
 
         def __init__(self, type_string: str,
@@ -672,11 +610,11 @@ class Interface:
             super().__init__(name=name)
             self._getter = getter
             self._setter = setter
-            self._type_string = type_string
+            self._type, = bustypes.from_signature(type_string)
             self._value = value
 
         def _describe(self) -> Dict[str, Any]:
-            return {'type': self._type_string, 'flags': 'r' if self._setter is None else 'w'}
+            return {'type': self._type.typestring, 'flags': 'r' if self._setter is None else 'w'}
 
         def __get__(self, obj: 'org_freedesktop_DBus_Properties', cls: Optional[type] = None) -> Any:
             assert self._name is not None
@@ -703,15 +641,15 @@ class Interface:
                 obj._dbus_property_values = {}
             obj._dbus_property_values[self._name] = value
             if obj._dbus_bus is not None:
-                obj.properties_changed(self._interface, {self._name: {"t": self._type_string, "v": value}}, [])
+                obj.properties_changed(self._interface, {self._name: bustypes.Variant(value, self._type)}, [])
 
         def to_dbus(self, obj):
-            return {"t": self._type_string, "v": self.__get__(obj)}
+            return bustypes.Variant(self.__get__(obj), self._type)
 
         def from_dbus(self, obj, value):
-            if self._setter is None or self._type_string != value["t"]:
+            if self._setter is None or self._type != value.type:
                 raise Object.Method.Unhandled
-            self._setter.__get__(obj)(value["v"])
+            self._setter.__get__(obj)(value.value)
 
         def getter(self, getter: Callable[[Any], Any]) -> Callable[[Any], Any]:
             if self._value is not None:
@@ -739,20 +677,23 @@ class Interface:
         scheme.
         """
         _category = 'signals'
+        _type: bustypes.MessageType
 
         def __init__(self, *out_types: str, name: Optional[str] = None) -> None:
             super().__init__(name=name)
-            self._out_types = list(out_types)
-            self._signature = ''.join(out_types)
+            self._type = bustypes.MessageType(out_types)
 
         def _describe(self) -> Dict[str, Any]:
-            return {'in': self._out_types}
+            return {'in': self._type.typestrings}
 
         def __get__(self, obj: Any, cls: Optional[type] = None) -> Callable[..., None]:
             def emitter(obj: Object, *args: Any) -> None:
                 assert self._interface is not None
                 assert self._name is not None
-                obj.emit_signal(self._interface, self._name, self._signature, *args)
+                assert obj._dbus_bus is not None
+                message = obj._dbus_bus.message_new_signal(obj._dbus_path, self._interface, self._name)
+                self._type.write(message, *args)
+                message.send()
             return emitter.__get__(obj, cls)
 
     class Method(_Member):
@@ -780,9 +721,8 @@ class Interface:
 
         def __init__(self, out_types=(), in_types=(), name=None):
             super().__init__(name=name)
-            self._out_types = list(out_types)
-            self._in_types = list(in_types)
-            self._in_signature = ''.join(in_types)
+            self._out_type = bustypes.MessageType(out_types)
+            self._in_type = bustypes.MessageType(in_types)
             self._func = None
 
         def __get__(self, obj, cls=None):
@@ -794,17 +734,19 @@ class Interface:
             return self
 
         def _describe(self) -> Dict[str, Any]:
-            return {'in': self._in_types, 'out': self._out_types}
+            return {'in': [item.typestring for item in self._in_type.item_types],
+                    'out': [item.typestring for item in self._out_type.item_types]}
 
         def _invoke(self, obj, message):
-            if not message.has_signature(self._in_signature):
+            args = self._in_type.read(message)
+            if args is None:
                 return False
             try:
-                result = self._func.__get__(obj)(*message.get_body())
+                result = self._func.__get__(obj)(*args)
             except BusError as error:
                 return message.reply_method_error(error)
 
-            return message.reply_method_function_return_value(self._out_types, result)
+            return message.reply_method_function_return_value(self._out_type, result)
 
 
 class org_freedesktop_DBus_Peer(Interface):

@@ -19,6 +19,7 @@ import tempfile
 import unittest
 
 import dbusmock
+import json
 import systemd_ctypes
 from systemd_ctypes import introspection, bus
 
@@ -190,15 +191,26 @@ class TestAPI(dbusmock.DBusTestCase):
 
         # TODO: Add more data types once int and variants work
 
+    def test_binary_encode(self):
+        self.add_method('', 'DecodeUTF8', 'ay', 's', 'ret = bytes(args[0]).decode("utf-8")')
+        result = self.bus_user.call_method(*TEST_ADDR, 'DecodeUTF8', 'ay', b'G\xc3\xa4nsef\xc3\xbc\xc3\x9fchen')
+        self.assertEqual(result, ('Gänsefüßchen',))
+
     def test_base64_binary_encode(self):
         self.add_method('', 'DecodeUTF8', 'ay', 's', 'ret = bytes(args[0]).decode("utf-8")')
         result = self.bus_user.call_method(*TEST_ADDR, 'DecodeUTF8', 'ay', 'R8OkbnNlZsO8w59jaGVu')
         self.assertEqual(result, ('Gänsefüßchen',))
 
+    def test_binary_decode(self):
+        self.add_method('', 'EncodeUTF8', 's', 'ay', 'ret = args[0].encode("utf-8")')
+        result = self.bus_user.call_method(*TEST_ADDR, 'EncodeUTF8', 's', 'Gänsefüßchen')
+        self.assertEqual(result, (b'G\xc3\xa4nsef\xc3\xbc\xc3\x9fchen',))
+
     def test_base64_binary_decode(self):
         self.add_method('', 'EncodeUTF8', 's', 'ay', 'ret = args[0].encode("utf-8")')
         result = self.bus_user.call_method(*TEST_ADDR, 'EncodeUTF8', 's', 'Gänsefüßchen')
-        self.assertEqual(result, ('R8OkbnNlZsO8w59jaGVu',))
+        result = json.loads(json.dumps(result, cls=systemd_ctypes.JSONEncoder))
+        self.assertEqual(result, ['R8OkbnNlZsO8w59jaGVu'])
 
     def test_unknown_method_sync(self):
         with self.assertRaisesRegex(systemd_ctypes.BusError, '.*org.freedesktop.DBus.Error.UnknownMethod:.*'
