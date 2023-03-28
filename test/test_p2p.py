@@ -53,6 +53,11 @@ class CommonTests:
             async def do_nothing_slowly(self):
                 await asyncio.sleep(0.1)
 
+            @bus.Interface.Method('s', 's')
+            def read_file(self, filename: str) -> str:
+                with open(filename) as fp:
+                    return fp.read()
+
             everything_changed = bus.Interface.Signal('i', 's')
 
         self.test_object = cockpit_Test()
@@ -111,6 +116,7 @@ class CommonTests:
                         'PartitionSlowly': {'in': ['s', 's'], 'out': ['s', 's', 's']},
                         'DoNothing': {'in': [], 'out': []},
                         'DoNothingSlowly': {'in': [], 'out': []},
+                        'ReadFile': {'in': ['s'], 'out': ['s']},
                     },
                     'properties': {
                         'Answer': {'type': 'i', 'flags': 'r'},
@@ -174,6 +180,12 @@ class CommonTests:
         async def test():
             with self.assertRaisesRegex(BusError, 'cockpit.Error.ZeroDivisionError: Divide by zero'):
                 await self.client.call_method_async(None, '/test', 'cockpit.Test', 'Divide', 'ii', 1554, 0)
+        run_async(test())
+
+    def test_method_throws_oserror(self):
+        async def test():
+            with self.assertRaisesRegex(BusError, 'org.freedesktop.DBus.Error.FileNotFound: .*notthere.*'):
+                await self.client.call_method_async(None, '/test', 'cockpit.Test', 'ReadFile', 's', 'notthere')
         run_async(test())
 
     def test_async_method(self):

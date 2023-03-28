@@ -93,6 +93,7 @@ sd.bus_message.register_methods([
     (instancemethod, negative_errno, 'exit_container', []),
     (instancemethod, negative_errno, 'has_signature', [utf8]),
     (instancemethod, negative_errno, 'is_method_error', [utf8]),
+    (instancemethod, negative_errno, 'new_method_errnof', [POINTER(sd.bus_message_p), c_int, utf8, utf8]),
     (instancemethod, negative_errno, 'new_method_errorf', [POINTER(sd.bus_message_p), utf8, utf8, utf8]),
     (instancemethod, negative_errno, 'new_method_return', [POINTER(sd.bus_message_p)]),
     (instancemethod, negative_errno, 'open_container', [c_char, utf8]),
