@@ -20,7 +20,7 @@ import enum
 import functools
 import logging
 from ctypes import byref
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 from . import introspection
 from .libsystemd import sd
@@ -93,17 +93,21 @@ class BusMessage(sd.bus_message):
         reply.append(signature, *args)
         return reply
 
-    def new_method_error(self, error: BusError) -> 'BusMessage':
+    def new_method_error(self, error: Union[BusError, OSError]) -> 'BusMessage':
         """Create a new error message as a reply to this message.
 
         This only makes sense when performed on a method call message.
 
-        :error: BusError containing the error code and message to send
+        :error: BusError or OSError of the error to send
 
         :returns: the reply message
         """
         reply = BusMessage()
-        super().new_method_errorf(reply, error.name, "%s", error.message)
+        if isinstance(error, BusError):
+            super().new_method_errorf(reply, error.name, "%s", error.message)
+        else:
+            assert isinstance(error, OSError)
+            super().new_method_errnof(reply, error.errno, "%s", str(error))
         return reply
 
     def append_arg(self, typestring: str, arg: Any) -> None:
@@ -151,10 +155,10 @@ class BusMessage(sd.bus_message):
         self.get_bus().send(self, None)
         return True
 
-    def reply_method_error(self, error: BusError) -> bool:  # Literal[True]
+    def reply_method_error(self, error: Union[BusError, OSError]) -> bool:  # Literal[True]
         """Sends an error as a reply to a method call message.
 
-        :error: A BusError
+        :error: A BusError or OSError
 
         :returns: True
         """
@@ -173,7 +177,7 @@ class BusMessage(sd.bus_message):
     def _coroutine_task_complete(self, out_type: bustypes.MessageType, task: asyncio.Task) -> None:
         try:
             self.reply_method_function_return_value(out_type, task.result())
-        except BusError as exc:
+        except (BusError, OSError) as exc:
             self.reply_method_error(exc)
 
     def reply_method_function_return_value(self,
@@ -743,7 +747,7 @@ class Interface:
                 return False
             try:
                 result = self._func.__get__(obj)(*args)
-            except BusError as error:
+            except (BusError, OSError) as error:
                 return message.reply_method_error(error)
 
             return message.reply_method_function_return_value(self._out_type, result)
