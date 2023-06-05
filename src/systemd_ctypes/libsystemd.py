@@ -15,126 +15,301 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import ctypes
 import os
 import sys
-
-from ctypes import CFUNCTYPE, Structure, POINTER, byref, c_char, c_int, c_uint8, c_uint32, c_uint64, c_void_p
+from typing import List, Optional, Tuple, Union
 
 from .inotify import inotify_event
-from .librarywrapper import librarywrapper, utf8, negative_errno, instancemethod, boolint
+from .librarywrapper import (
+    Callback,
+    Errno,
+    Reference,
+    ReferenceType,
+    UserData,
+    WeakReference,
+    byref,
+)
+from .typing import Annotated
 
 
-class sd(librarywrapper):
-    namespace = 'sd'
+class sd_bus_error(ctypes.Structure):
+    # This is ABI, so we are safe to assume it doesn't change.
+    # Unfortunately, we lack anything like sd_bus_error_new().
+    _fields_ = (
+        ("name", ctypes.c_char_p),
+        ("message", ctypes.c_char_p),
+        ("_need_free", ctypes.c_int),
+    )
 
-    class bus_error(Structure):
-        # This is ABI, so we are safe to assume it doesn't change.
-        # Unfortunately, we lack anything like sd_bus_error_new().
-        _fields_ = [
-            ("name", utf8),
-            ("message", utf8),
-            ("_need_free", c_int)
-        ]
+    def get(self) -> Tuple[str, str]:
+        return self.name.decode(), self.message.decode()
 
-        def get(self):
-            return self.name.value, self.message.value
+    def set(self, name: str, message: str) -> None:
+        result = libsystemd.sd_bus_error_set(byref(self), name, message)
+        if result < 0:
+            raise OSError(-result, f"sd_bus_error_set: {os.strerror(-result)}")
 
-        def set(self, name, message):
-            result = sd._library.sd_bus_error_set(byref(self), name, message)
-            if result < 0:
-                raise OSError(-result, f'sd_bus_error_set: {os.strerror(-result)}')
-
-        def __del__(self):
-            if self._b_needsfree_:
-                sd._library.sd_bus_error_free(byref(self))
-
-    class id128(Structure):
-        # HACK: Pass-by-value of array-containing-structs is broken on Python
-        # 3.6. See https://bugs.python.org/issue22273
-        _fields_ = [
-            ("bytes", c_uint8 * 16)
-        ] if sys.version_info >= (3, 7, 0) else [
-            ("one", c_uint64), ("two", c_uint64)
-        ]
+    def __del__(self) -> None:
+        if self._b_needsfree_:
+            libsystemd.sd_bus_error_free(byref(self))
 
 
-sd.dlopen('libsystemd.so.0')
+class sd_id128(ctypes.Structure):
+    # HACK: Pass-by-value of array-containing-structs is broken on Python
+    # 3.6. See https://bugs.python.org/issue22273
+    _fields_: List[Tuple[str, type]] = (
+        [("bytes", ctypes.c_uint8 * 16)]
+        if sys.version_info >= (3, 7, 0)
+        else [("one", ctypes.c_uint64), ("two", ctypes.c_uint64)]
+    )
 
-sd.register_reference_types([
-    'bus',
-    'bus_message',
-    'bus_slot',
-    'event',
-    'event_source',
-])
 
-sd.bus_message_handler_t = CFUNCTYPE(c_int, sd.bus_message_p, c_void_p, POINTER(sd.bus_error))
-sd.event_inotify_handler_t = CFUNCTYPE(c_int, sd.event_source_p, POINTER(inotify_event), c_void_p)
+class sd_event_source(ReferenceType):
+    ...
 
-sd.event.register_methods([
-    (instancemethod, negative_errno, 'add_inotify',
-     [POINTER(sd.event_source), utf8, c_uint32, sd.event_inotify_handler_t, c_void_p]),
-    (instancemethod, negative_errno, 'dispatch', []),
-    (instancemethod, negative_errno, 'get_fd', []),
-    (instancemethod, negative_errno, 'get_state', []),
-    (instancemethod, negative_errno, 'loop', []),
-    (instancemethod, negative_errno, 'prepare', []),
-    (instancemethod, negative_errno, 'wait', [c_uint64]),
-    (staticmethod, negative_errno, 'default', [POINTER(sd.event_p)]),
-])
 
-sd.bus_message.register_methods([
-    (instancemethod, negative_errno, 'append_basic', [sd.bus_message_p, c_char, c_void_p]),
-    (instancemethod, negative_errno, 'read_basic', [sd.bus_message_p, c_char, c_void_p]),
-    (instancemethod, POINTER(sd.bus_error), 'get_error', []),
-    (instancemethod, negative_errno, 'at_end', [boolint]),
-    (instancemethod, negative_errno, 'close_container', []),
-    (instancemethod, negative_errno, 'enter_container', [c_char, utf8]),
-    (instancemethod, negative_errno, 'exit_container', []),
-    (instancemethod, negative_errno, 'has_signature', [utf8]),
-    (instancemethod, negative_errno, 'is_method_error', [utf8]),
-    (instancemethod, negative_errno, 'new_method_errnof', [POINTER(sd.bus_message_p), c_int, utf8, utf8]),
-    (instancemethod, negative_errno, 'new_method_errorf', [POINTER(sd.bus_message_p), utf8, utf8, utf8]),
-    (instancemethod, negative_errno, 'new_method_return', [POINTER(sd.bus_message_p)]),
-    (instancemethod, negative_errno, 'open_container', [c_char, utf8]),
-    (instancemethod, negative_errno, 'peek_type', [POINTER(c_char), POINTER(utf8)]),
-    (instancemethod, negative_errno, 'rewind', [boolint]),
-    (instancemethod, negative_errno, 'seal', [c_uint64, c_uint64]),
-    (instancemethod, sd.bus_p, 'get_bus', []),
-    (instancemethod, utf8, 'get_destination', []),
-    (instancemethod, utf8, 'get_interface', []),
-    (instancemethod, utf8, 'get_member', []),
-    (instancemethod, utf8, 'get_path', []),
-    (instancemethod, utf8, 'get_sender', []),
-    (instancemethod, utf8, 'get_signature', [boolint]),
-])
+class sd_event(ReferenceType):
+    def _add_inotify(
+        self: 'sd_event',
+        source: Reference[sd_event_source],
+        path: str,
+        event: int,
+        callback: Callback,
+        user_data: UserData,
+    ) -> Union[None, Errno]:
+        ...
 
-sd.bus.register_methods([
-    (instancemethod, negative_errno, 'add_match', [POINTER(sd.bus_slot), utf8, sd.bus_message_handler_t, c_void_p]),
-    (instancemethod, negative_errno, 'add_match_async',
-     [POINTER(sd.bus_slot), utf8, sd.bus_message_handler_t, sd.bus_message_handler_t, c_void_p]),
-    (instancemethod, negative_errno, 'add_object', [POINTER(sd.bus_slot), utf8, sd.bus_message_handler_t, c_void_p]),
-    (instancemethod, negative_errno, 'attach_event', [sd.event_p, c_int]),
-    (instancemethod, negative_errno, 'call',
-     [sd.bus_message_p, c_uint64, POINTER(sd.bus_error), POINTER(sd.bus_message_p)]),
-    (instancemethod, negative_errno, 'call_async',
-     [POINTER(sd.bus_slot), sd.bus_message_p, sd.bus_message_handler_t, c_void_p, c_uint64]),
-    (instancemethod, negative_errno, 'flush', []),
-    (instancemethod, negative_errno, 'get_fd', []),
-    (instancemethod, negative_errno, 'message_new', [POINTER(sd.bus_message_p), c_uint8]),
-    (instancemethod, negative_errno, 'message_new_method_call', [POINTER(sd.bus_message_p), utf8, utf8, utf8, utf8]),
-    (instancemethod, negative_errno, 'message_new_signal', [POINTER(sd.bus_message_p), utf8, utf8, utf8]),
-    (instancemethod, negative_errno, 'new', [POINTER(sd.bus_p)]),
-    (instancemethod, negative_errno, 'release_name', [utf8]),
-    (instancemethod, negative_errno, 'request_name', [utf8, c_uint64]),
-    (instancemethod, negative_errno, 'set_address', [utf8]),
-    (instancemethod, negative_errno, 'set_bus_client', [boolint]),
-    (instancemethod, negative_errno, 'set_fd', [c_int, c_int]),
-    (instancemethod, negative_errno, 'set_server', [boolint, sd.id128]),
-    (instancemethod, negative_errno, 'start', []),
-    (instancemethod, negative_errno, 'wait', [c_uint64]),
-    (instancemethod, negative_errno, 'send', [sd.bus_message_p, POINTER(c_uint64)]),
-    (staticmethod, negative_errno, 'default_system', [POINTER(sd.bus_p)]),
-    (staticmethod, negative_errno, 'default_user', [POINTER(sd.bus_p)]),
-    (staticmethod, negative_errno, 'new', [POINTER(sd.bus_p)]),
-])
+    def dispatch(self: 'sd_event') -> Union[None, Errno]:
+        ...
+
+    def get_fd(self: 'sd_event') -> Union[int, Errno]:
+        raise NotImplementedError
+
+    def get_state(self: 'sd_event') -> Union[int, Errno]:
+        raise NotImplementedError
+
+    def loop(self: 'sd_event') -> Union[None, Errno]:
+        ...
+
+    def prepare(self: 'sd_event') -> Union[None, Errno]:
+        ...
+
+    def wait(
+        self: 'sd_event', timeout: Annotated[int, ctypes.c_uint64]
+    ) -> Union[None, Errno]:
+        ...
+
+    @staticmethod
+    def _default(ret: Reference['sd_event']) -> Union[None, Errno]:
+        ...
+
+
+class sd_bus_slot(ReferenceType):
+    ...
+
+
+class sd_bus_message(ReferenceType):
+    def rewind(self: 'sd_bus_message', complete: bool) -> Union[None, Errno]:
+        ...
+
+    def _get_error(self: 'sd_bus_message') -> Reference[sd_bus_error]:
+        raise NotImplementedError
+
+    def has_signature(self: 'sd_bus_message', signature: str) -> Union[bool, Errno]:
+        raise NotImplementedError
+
+    def is_method_error(self: 'sd_bus_message', name: str) -> Union[bool, Errno]:
+        raise NotImplementedError
+
+    def _new_method_errnof(
+            self: 'sd_bus_message',
+            message: Reference['sd_bus_message'],
+            error: int,
+            format_str: str,
+            first_arg: str
+    ) -> Union[None, Errno]:
+        ...
+
+    def _new_method_errorf(
+        self: 'sd_bus_message',
+        m: Reference['sd_bus_message'],
+        name: str,
+        format_str: str,
+        first_arg: str
+    ) -> Union[None, Errno]:
+        ...
+
+    def _new_method_return(
+        self: 'sd_bus_message', m: Reference['sd_bus_message']
+    ) -> Union[None, Errno]:
+        ...
+
+    def seal(
+        self: 'sd_bus_message',
+        cookie: Annotated[int, ctypes.c_uint64],
+        timeout: Annotated[int, ctypes.c_uint64],
+    ) -> Union[None, Errno]:
+        ...
+
+    def _get_bus(self: 'sd_bus_message') -> WeakReference:
+        raise NotImplementedError
+
+    def get_destination(self: 'sd_bus_message') -> str:
+        raise NotImplementedError
+
+    def get_interface(self: 'sd_bus_message') -> str:
+        raise NotImplementedError
+
+    def get_member(self: 'sd_bus_message') -> str:
+        raise NotImplementedError
+
+    def get_path(self: 'sd_bus_message') -> str:
+        raise NotImplementedError
+
+    def get_sender(self: 'sd_bus_message') -> Optional[str]:
+        raise NotImplementedError
+
+    def get_signature(self: 'sd_bus_message', complete: bool) -> str:
+        raise NotImplementedError
+
+
+class sd_bus(ReferenceType):
+    def _add_match(
+        self: 'sd_bus',
+        slot: Reference[sd_bus_slot],
+        match: str,
+        handler: Callback,
+        user_data: UserData,
+    ) -> Union[None, Errno]:
+        ...
+
+    def _add_match_async(
+        self: 'sd_bus',
+        slot: Reference[sd_bus_slot],
+        match: str,
+        callback: Callback,
+        install_callback: Callback,
+        user_data: UserData,
+    ) -> Union[None, Errno]:
+        ...
+
+    def _add_object(
+        self: 'sd_bus',
+        slot: Reference[sd_bus_slot],
+        path: str,
+        callback: Callback,
+        user_data: UserData,
+    ) -> Union[None, Errno]:
+        ...
+
+    def attach_event(
+        self: 'sd_bus', event: Optional[sd_event], priority: int
+    ) -> Union[None, Errno]:
+        ...
+
+    def _call(
+        self: 'sd_bus',
+        message: sd_bus_message,
+        timeout: Annotated[int, ctypes.c_uint64],
+        ret_error: Reference[sd_bus_error],
+        reply: Reference[sd_bus_message],
+    ) -> Union[None, Errno]:
+        ...
+
+    def _call_async(
+        self: 'sd_bus',
+        slot: Reference[sd_bus_slot],
+        message: sd_bus_message,
+        callback: Callback,
+        user_data: UserData,
+        timeout_usec: Annotated[int, ctypes.c_uint64],
+    ) -> Union[None, Errno]:
+        ...
+
+    def flush(self: 'sd_bus') -> Union[None, Errno]:
+        ...
+
+    def get_fd(self: 'sd_bus') -> Union[int, Errno]:
+        raise NotImplementedError
+
+    def _message_new_method_call(
+        self: 'sd_bus',
+        message: Reference[sd_bus_message],
+        destination: Optional[str],
+        path: str,
+        interface: str,
+        member: str,
+    ) -> Union[None, Errno]:
+        ...
+
+    def _message_new_signal(
+        self: 'sd_bus',
+        message: Reference[sd_bus_message],
+        path: str,
+        interface: str,
+        member: str,
+    ) -> Union[None, Errno]:
+        ...
+
+    def release_name(self: 'sd_bus', name: str) -> Union[None, Errno]:
+        ...
+
+    def request_name(
+        self: 'sd_bus', name: str, flags: Annotated[int, ctypes.c_uint64]
+    ) -> Union[None, Errno]:
+        ...
+
+    def set_address(self: 'sd_bus', address: str) -> Union[None, Errno]:
+        ...
+
+    def set_bus_client(self: 'sd_bus', b: bool) -> Union[None, Errno]:
+        ...
+
+    def set_fd(self: 'sd_bus', input_fd: int, output_fd: int) -> Union[None, Errno]:
+        ...
+
+    def set_server(self: 'sd_bus', b: bool, bus_d: sd_id128) -> Union[None, Errno]:
+        ...
+
+    def start(self: 'sd_bus') -> Union[None, Errno]:
+        ...
+
+    def wait(
+        self: 'sd_bus', timeout_usec: Annotated[int, ctypes.c_uint64]
+    ) -> Union[None, Errno]:
+        ...
+
+    def send(
+        self: 'sd_bus', message: sd_bus_message, cookie: Optional[Reference[ctypes.c_uint64]]
+    ) -> Union[None, Errno]:
+        ...
+
+    @staticmethod
+    def _default_system(ret: Reference['sd_bus']) -> Union[None, Errno]:
+        ...
+
+    @staticmethod
+    def _default_user(ret: Reference['sd_bus']) -> Union[None, Errno]:
+        ...
+
+    @staticmethod
+    def _new(ret: Reference['sd_bus']) -> Union[None, Errno]:
+        ...
+
+
+sd_bus_message_handler_t = ctypes.CFUNCTYPE(
+    ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(sd_bus_error))
+sd_event_inotify_handler_t = ctypes.CFUNCTYPE(
+    ctypes.c_int, ctypes.c_void_p, ctypes.POINTER(inotify_event), ctypes.c_void_p)
+
+
+libsystemd = ctypes.CDLL("libsystemd.so.0")
+for cls in {
+    sd_bus,
+    sd_bus_message,
+    sd_bus_slot,
+    sd_event,
+    sd_event_source,
+}:
+    cls._install_cfuncs(libsystemd)
