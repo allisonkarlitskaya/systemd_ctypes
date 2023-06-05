@@ -34,7 +34,7 @@ class inotify_event(ctypes.Structure):
         return ctypes.cast(ctypes.addressof(self), ctypes.POINTER(event_with_name)).contents.name
 
 
-Event = enum.IntFlag('inotify.Event', [
+Event = enum.IntFlag('Event', [
     'ACCESS', 'MODIFY', 'ATTRIB', 'CLOSE_WRITE',
     'CLOSE_NOWRITE', 'OPEN', 'MOVED_FROM', 'MOVED_TO',
     'CREATE', 'DELETE', 'DELETE_SELF', 'MOVE_SELF',
