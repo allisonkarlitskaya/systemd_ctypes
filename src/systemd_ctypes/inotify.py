@@ -16,7 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import ctypes
-import enum
+from enum import IntFlag, auto
 
 
 class inotify_event(ctypes.Structure):
@@ -34,20 +34,34 @@ class inotify_event(ctypes.Structure):
         return ctypes.cast(ctypes.addressof(self), ctypes.POINTER(event_with_name)).contents.name
 
 
-Event = enum.IntFlag('Event', [
-    'ACCESS', 'MODIFY', 'ATTRIB', 'CLOSE_WRITE',
-    'CLOSE_NOWRITE', 'OPEN', 'MOVED_FROM', 'MOVED_TO',
-    'CREATE', 'DELETE', 'DELETE_SELF', 'MOVE_SELF',
-    '_unused_0x1000', 'UNMOUNT', 'Q_OVERFLOW', 'IGNORED',
-    '_unused_0x10000', '_unused_0x20000', '_unused_0x40000', '_unused_0x80000',
-    '_unused_0x100000', '_unused_0x200000', '_unused_0x400000', '_unused_0x800000',
-    'ONLYDIR', 'DONT_FOLLOW', 'EXCL_UNLINK', '_unused_0x8000000',
-    'MASK_CREATE', 'MASK_ADD', 'ISDIR', 'ONESHOE'
+class Event(IntFlag):
+    ACCESS = auto()
+    MODIFY = auto()
+    ATTRIB = auto()
+    CLOSE_WRITE = auto()
+    CLOSE_NOWRITE = auto()
+    OPEN = auto()
+    MOVED_FROM = auto()
+    MOVED_TO = auto()
+    CREATE = auto()
+    DELETE = auto()
+    DELETE_SELF = auto()
+    MOVE_SELF = auto()
 
-])
-Event.CLOSE = Event.CLOSE_WRITE | Event.CLOSE_NOWRITE
-Event.MOVE = Event.MOVED_FROM | Event.MOVED_TO
+    UNMOUNT = 1 << 13
+    Q_OVERFLOW = auto()
+    IGNORED = auto()
 
-# non-standard.  All "change" events (ie: excluding read-only events)
-Event.CHANGED = (Event.MODIFY | Event.ATTRIB | Event.CLOSE_WRITE | Event.MOVE |
-                 Event.CREATE | Event.DELETE | Event.DELETE_SELF | Event.MOVE_SELF)
+    ONLYDIR = 1 << 24
+    DONT_FOLLOW = auto()
+    EXCL_UNLINK = auto()
+
+    MASK_CREATE = 1 << 28
+    MASK_ADD = auto()
+    ISDIR = auto()
+    ONESHOT = auto()
+
+    CLOSE = CLOSE_WRITE | CLOSE_NOWRITE
+    MOVE = MOVED_FROM | MOVED_TO
+    CHANGED = (MODIFY | ATTRIB | CLOSE_WRITE | MOVE |
+               CREATE | DELETE | DELETE_SELF | MOVE_SELF)
