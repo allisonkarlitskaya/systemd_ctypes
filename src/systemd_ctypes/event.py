@@ -22,28 +22,28 @@ import sys
 from ctypes import byref
 
 from . import inotify
-from .libsystemd import sd
+from . import libsystemd
 
 
-class Event(sd.event):
-    _default = None
+class Event(libsystemd.sd_event):
+    _default_instance = None
 
     @staticmethod
     def default():
-        if not Event._default:
-            Event._default = Event()
-            sd.event.default(Event._default)
-        return Event._default
+        if Event._default_instance is None:
+            Event._default_instance = Event()
+            Event._default(Event._default_instance)
+        return Event._default_instance
 
     def add_inotify(self, path, mask, handler):
-        @sd.event_inotify_handler_t
+        @libsystemd.sd_event_inotify_handler_t
         def wrapper(source, _event, userdata):
             event = _event.contents
             handler(inotify.Event(event.mask), event.cookie, event.name if event.len else None)
             return 0
-        source = sd.event_source()
+        source = libsystemd.sd_event_source()
         source.wrapper = wrapper
-        super().add_inotify(byref(source), path, mask, source.wrapper, None)
+        self._add_inotify(byref(source), path, mask, source.wrapper, None)
         return source
 
     def add_inotify_fd(self, fd, mask, handler):

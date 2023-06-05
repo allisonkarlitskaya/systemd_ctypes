@@ -23,7 +23,7 @@ from ctypes import byref
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 from . import introspection
-from .libsystemd import sd
+from . import libsystemd
 from . import bustypes
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ class BusError(Exception):
         self.message = message
 
 
-class BusMessage(sd.bus_message):
+class BusMessage(libsystemd.sd_bus_message):
     """A message, received from or to be sent over D-Bus
 
     This is the low-level interface to receiving and sending individual
@@ -65,14 +65,14 @@ class BusMessage(sd.bus_message):
 
         :returns: the Bus
         """
-        return Bus.ref(super().get_bus())
+        return Bus.ref(self._get_bus())
 
     def get_error(self) -> Optional[BusError]:
         """Get the BusError from a message.
 
         :returns: a BusError for an error message, or None for a non-error message
         """
-        error = super().get_error()
+        error = self._get_error()
         if error:
             return BusError(*error.contents.get())
         else:
@@ -89,7 +89,7 @@ class BusMessage(sd.bus_message):
         :returns: the reply message
         """
         reply = BusMessage()
-        super().new_method_return(reply)
+        self._new_method_return(reply)
         reply.append(signature, *args)
         return reply
 
@@ -104,10 +104,10 @@ class BusMessage(sd.bus_message):
         """
         reply = BusMessage()
         if isinstance(error, BusError):
-            super().new_method_errorf(reply, error.name, "%s", error.message)
+            self._new_method_errorf(reply, error.name, "%s", error.message)
         else:
             assert isinstance(error, OSError)
-            super().new_method_errnof(reply, error.errno, "%s", str(error))
+            self._new_method_errnof(reply, error.errno, "%s", str(error))
         return reply
 
     def append_arg(self, typestring: str, arg: Any) -> None:
@@ -144,6 +144,7 @@ class BusMessage(sd.bus_message):
         :returns: an n-tuple containing one value per argument in the message
         """
         self.rewind(True)
+        print(self.get_signature(True))
         types = bustypes.from_signature(self.get_signature(True))
         return tuple(type_.reader(self) for type_ in types)
 
@@ -219,11 +220,11 @@ class BusMessage(sd.bus_message):
         return reply.send()
 
 
-class Slot(sd.bus_slot):
+class Slot(libsystemd.sd_bus_slot):
     def __init__(self, callback):
         def handler(message, _data, _err):
             return 1 if callback(BusMessage.ref(message)) else 0
-        self.callback = sd.bus_message_handler_t(handler)
+        self.callback = libsystemd.sd_bus_message_handler_t(handler)
         self.userdata = None
 
     def cancel(self):
@@ -249,9 +250,9 @@ class PendingCall(Slot):
         self.future = future
 
 
-class Bus(sd.bus):
-    _default_system = None
-    _default_user = None
+class Bus(libsystemd.sd_bus):
+    _default_system_instance = None
+    _default_user_instance = None
 
     class NameFlags(enum.IntFlag):
         DEFAULT = 0
@@ -262,7 +263,7 @@ class Bus(sd.bus):
     @staticmethod
     def new(fd=None, address=None, bus_client=False, server=False, start=True, attach_event=True):
         bus = Bus()
-        sd.bus.new(bus)
+        Bus._new(bus)
         if address is not None:
             bus.set_address(address)
         if fd is not None:
@@ -270,7 +271,7 @@ class Bus(sd.bus):
         if bus_client:
             bus.set_bus_client(True)
         if server:
-            bus.set_server(True, sd.id128())
+            bus.set_server(True, libsystemd.sd_id128())
         if address is not None or fd is not None:
             if start:
                 bus.start()
@@ -280,39 +281,39 @@ class Bus(sd.bus):
 
     @staticmethod
     def default_system(attach_event=True):
-        if not Bus._default_system:
-            Bus._default_system = Bus()
-            sd.bus.default_system(Bus._default_system)
+        if Bus._default_system_instance is None:
+            Bus._default_system_instance = Bus()
+            Bus._default_system(Bus._default_system_instance)
             if attach_event:
-                Bus._default_system.attach_event(None, 0)
-        return Bus._default_system
+                Bus._default_system_instance.attach_event(None, 0)
+        return Bus._default_system_instance
 
     @staticmethod
     def default_user(attach_event=True):
-        if not Bus._default_user:
-            Bus._default_user = Bus()
-            sd.bus.default_user(Bus._default_user)
+        if Bus._default_user_instance is None:
+            Bus._default_user_instance = Bus()
+            Bus._default_user(Bus._default_user_instance)
             if attach_event:
-                Bus._default_user.attach_event(None, 0)
-        return Bus._default_user
+                Bus._default_user_instance.attach_event(None, 0)
+        return Bus._default_user_instance
 
     def message_new_method_call(self, destination, path, interface, member, types='', *args):
         message = BusMessage()
-        super().message_new_method_call(message, destination, path, interface, member)
+        self._message_new_method_call(message, destination, path, interface, member)
         message.append(types, *args)
         return message
 
     def message_new_signal(self, path, interface, member, types='', *args):
         message = BusMessage()
-        super().message_new_signal(message, path, interface, member)
+        self._message_new_signal(message, path, interface, member)
         message.append(types, *args)
         return message
 
     def call(self, message, timeout=None):
         reply = BusMessage()
-        error = sd.bus_error()
+        error = libsystemd.sd_bus_error()
         try:
-            super().call(message, timeout or 0, byref(error), reply)
+            self._call(message, timeout or 0, byref(error), reply)
             return reply
         except OSError as exc:
             raise BusError(*error.get()) from exc
@@ -326,7 +327,7 @@ class Bus(sd.bus):
 
     async def call_async(self, message, timeout=None):
         pending = PendingCall()
-        super().call_async(pending, message, pending.callback, pending.userdata, timeout or 0)
+        self._call_async(pending, message, pending.callback, pending.userdata, timeout or 0)
         return await pending.future
 
     async def call_method_async(self, destination, path, interface, member, types='', *args, timeout=None):
@@ -338,12 +339,12 @@ class Bus(sd.bus):
 
     def add_match(self, rule, handler):
         slot = Slot(handler)
-        super().add_match(byref(slot), rule, slot.callback, slot.userdata)
+        self._add_match(byref(slot), rule, slot.callback, slot.userdata)
         return slot
 
     def add_object(self, path, obj):
         slot = Slot(obj.message_received)
-        super().add_object(byref(slot), path, slot.callback, slot.userdata)
+        self._add_object(byref(slot), path, slot.callback, slot.userdata)
         obj.registered_on_bus(self, path)
         return slot
 
