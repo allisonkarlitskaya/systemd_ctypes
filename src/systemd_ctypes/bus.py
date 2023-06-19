@@ -17,14 +17,12 @@
 
 import asyncio
 import enum
-import functools
 import logging
-from ctypes import byref
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+import typing
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
-from . import introspection
-from . import libsystemd
-from . import bustypes
+from . import bustypes, introspection, libsystemd
+from .librarywrapper import WeakReference, byref
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +37,7 @@ class BusError(Exception):
     :name: the 'code' of the error, like org.freedesktop.DBus.Error.UnknownMethod
     :message: a human-readable description of the error
     """
-    def __init__(self, name, message):
+    def __init__(self, name: str, message: str):
         super().__init__(f'{name}: {message}')
         self.name = name
         self.message = message
@@ -89,7 +87,7 @@ class BusMessage(libsystemd.sd_bus_message):
         :returns: the reply message
         """
         reply = BusMessage()
-        self._new_method_return(reply)
+        self._new_method_return(byref(reply))
         reply.append(signature, *args)
         return reply
 
@@ -104,10 +102,10 @@ class BusMessage(libsystemd.sd_bus_message):
         """
         reply = BusMessage()
         if isinstance(error, BusError):
-            self._new_method_errorf(reply, error.name, "%s", error.message)
+            self._new_method_errorf(byref(reply), error.name, "%s", error.message)
         else:
             assert isinstance(error, OSError)
-            self._new_method_errnof(reply, error.errno, "%s", str(error))
+            self._new_method_errnof(byref(reply), error.errno, "%s", str(error))
         return reply
 
     def append_arg(self, typestring: str, arg: Any) -> None:
@@ -130,7 +128,7 @@ class BusMessage(libsystemd.sd_bus_message):
         for type_, arg in zip(types, args):
             type_.writer(self, arg)
 
-    def get_body(self) -> Tuple[Any, ...]:
+    def get_body(self) -> Tuple[object, ...]:
         """Gets the body of a message.
 
         Possible return values are (), ('single',), or ('x', 'y').  If you
@@ -202,7 +200,7 @@ class BusMessage(libsystemd.sd_bus_message):
         """
         if asyncio.coroutines.iscoroutine(return_value):
             task = asyncio.create_task(return_value)
-            task.add_done_callback(functools.partial(self._coroutine_task_complete, out_type))
+            task.add_done_callback(lambda task: self._coroutine_task_complete(out_type, task))
             return True
 
         reply = self.new_method_return()
@@ -221,22 +219,31 @@ class BusMessage(libsystemd.sd_bus_message):
 
 
 class Slot(libsystemd.sd_bus_slot):
-    def __init__(self, callback):
-        def handler(message, _data, _err):
+    def __init__(self, callback: Callable[[BusMessage], bool]):
+        def handler(message: WeakReference, _data: object, _err: object) -> int:
             return 1 if callback(BusMessage.ref(message)) else 0
         self.callback = libsystemd.sd_bus_message_handler_t(handler)
         self.userdata = None
 
-    def cancel(self):
+    def cancel(self) -> None:
         self._unref()
         self.value = None
 
 
+if typing.TYPE_CHECKING:
+    FutureMessage = asyncio.Future[BusMessage]
+else:
+    # Python 3.6 can't subscript asyncio.Future
+    FutureMessage = asyncio.Future
+
+
 class PendingCall(Slot):
-    def __init__(self):
+    future: FutureMessage
+
+    def __init__(self) -> None:
         future = asyncio.get_running_loop().create_future()
 
-        def done(message):
+        def done(message: BusMessage) -> bool:
             error = message.get_error()
             if future.cancelled():
                 return True
@@ -261,9 +268,16 @@ class Bus(libsystemd.sd_bus):
         QUEUE = 1 << 2
 
     @staticmethod
-    def new(fd=None, address=None, bus_client=False, server=False, start=True, attach_event=True):
+    def new(
+            fd: Optional[int] = None,
+            address: Optional[str] = None,
+            bus_client: bool = False,
+            server: bool = False,
+            start: bool = True,
+            attach_event: bool = True
+    ) -> 'Bus':
         bus = Bus()
-        Bus._new(bus)
+        Bus._new(byref(bus))
         if address is not None:
             bus.set_address(address)
         if fd is not None:
@@ -280,69 +294,101 @@ class Bus(libsystemd.sd_bus):
         return bus
 
     @staticmethod
-    def default_system(attach_event=True):
+    def default_system(attach_event: bool = True) -> 'Bus':
         if Bus._default_system_instance is None:
             Bus._default_system_instance = Bus()
-            Bus._default_system(Bus._default_system_instance)
+            Bus._default_system(byref(Bus._default_system_instance))
             if attach_event:
                 Bus._default_system_instance.attach_event(None, 0)
         return Bus._default_system_instance
 
     @staticmethod
-    def default_user(attach_event=True):
+    def default_user(attach_event: bool = True) -> 'Bus':
         if Bus._default_user_instance is None:
             Bus._default_user_instance = Bus()
-            Bus._default_user(Bus._default_user_instance)
+            Bus._default_user(byref(Bus._default_user_instance))
             if attach_event:
                 Bus._default_user_instance.attach_event(None, 0)
         return Bus._default_user_instance
 
-    def message_new_method_call(self, destination, path, interface, member, types='', *args):
+    def message_new_method_call(
+            self,
+            destination: Optional[str],
+            path: str,
+            interface: str,
+            member: str,
+            types: str = '',
+            *args: object
+    ) -> BusMessage:
         message = BusMessage()
-        self._message_new_method_call(message, destination, path, interface, member)
+        self._message_new_method_call(byref(message), destination, path, interface, member)
         message.append(types, *args)
         return message
 
-    def message_new_signal(self, path, interface, member, types='', *args):
+    def message_new_signal(
+        self, path: str, interface: str, member: str, types: str = '', *args: object
+    ) -> BusMessage:
         message = BusMessage()
-        self._message_new_signal(message, path, interface, member)
+        self._message_new_signal(byref(message), path, interface, member)
         message.append(types, *args)
         return message
 
-    def call(self, message, timeout=None):
+    def call(self, message: BusMessage, timeout: Optional[int] = None) -> BusMessage:
         reply = BusMessage()
         error = libsystemd.sd_bus_error()
         try:
-            self._call(message, timeout or 0, byref(error), reply)
+            self._call(message, timeout or 0, byref(error), byref(reply))
             return reply
         except OSError as exc:
             raise BusError(*error.get()) from exc
 
-    def call_method(self, destination, path, interface, member, types='', *args, timeout=None):
+    def call_method(
+            self,
+            destination: str,
+            path: str,
+            interface: str,
+            member: str,
+            types: str = '',
+            *args: object,
+            timeout: Optional[int] = None
+    ) -> Tuple[object, ...]:
         logger.debug('Doing sync method call %s %s %s %s %s %s',
                      destination, path, interface, member, types, args)
         message = self.message_new_method_call(destination, path, interface, member, types, *args)
         message = self.call(message, timeout)
         return message.get_body()
 
-    async def call_async(self, message, timeout=None):
+    async def call_async(
+            self,
+            message: BusMessage,
+            timeout: Optional[int] = None
+    ) -> BusMessage:
         pending = PendingCall()
-        self._call_async(pending, message, pending.callback, pending.userdata, timeout or 0)
+        self._call_async(byref(pending), message, pending.callback, pending.userdata, timeout or 0)
         return await pending.future
 
-    async def call_method_async(self, destination, path, interface, member, types='', *args, timeout=None):
+    async def call_method_async(
+        self,
+        destination: Optional[str],
+        path: str,
+        interface: str,
+        member: str,
+        types: str = '',
+        *args: object,
+        timeout: Optional[int] = None
+    ) -> Tuple[object, ...]:
         logger.debug('Doing async method call %s %s %s %s %s %s',
                      destination, path, interface, member, types, args)
         message = self.message_new_method_call(destination, path, interface, member, types, *args)
         message = await self.call_async(message, timeout)
         return message.get_body()
 
-    def add_match(self, rule, handler):
+    def add_match(self, rule: str, handler: Callable[[BusMessage], bool]) -> Slot:
         slot = Slot(handler)
         self._add_match(byref(slot), rule, slot.callback, slot.userdata)
         return slot
 
-    def add_object(self, path, obj):
+    def add_object(self, path: str, obj: 'BaseObject') -> Slot:
         slot = Slot(obj.message_received)
         self._add_object(byref(slot), path, slot.callback, slot.userdata)
         obj.registered_on_bus(self, path)
@@ -383,7 +429,9 @@ class BaseObject:
         """
         pass
 
-    def emit_signal(self, interface: str, name: str, signature: str, *args: Any) -> bool:
+    def emit_signal(
+            self, interface: str, name: str, signature: str, *args: Any
+    ) -> bool:
         """Emit a D-Bus signal on this object
 
         The object must have been exported on the bus with Bus.add_object().
@@ -475,13 +523,13 @@ class Interface:
     _dbus_property_values: Optional[Dict[str, Any]] = None
 
     @classmethod
-    def __init_subclass__(cls, interface=None):
+    def __init_subclass__(cls, interface: Optional[str] = None) -> None:
         if interface is None:
             assert '__' not in cls.__name__, 'Class name cannot contain sequential underscores'
             interface = cls.__name__.replace('_', '.')
 
         # This is the information for this subclass directly
-        members = {'methods': {}, 'properties': {}, 'signals': {}}
+        members: Dict[str, Dict[str, Interface._Member]] = {'methods': {}, 'properties': {}, 'signals': {}}
         for name, member in cls.__dict__.items():
             if isinstance(member, Interface._Member):
                 member.setup(interface, name, members)
@@ -496,21 +544,21 @@ class Interface:
                                     if '_dbus_members' in ancestor.__dict__)
 
     @classmethod
-    def _find_interface(cls, interface):
+    def _find_interface(cls, interface: str) -> Dict[str, Dict[str, '_Member']]:
         try:
             return cls._dbus_interfaces[interface]
         except KeyError as exc:
             raise Object.Method.Unhandled from exc
 
     @classmethod
-    def _find_category(cls, interface, category):
+    def _find_category(cls, interface: str, category: str) -> Dict[str, '_Member']:
         return cls._find_interface(interface)[category]
 
     @classmethod
-    def _find_member(cls, interface, category, member):
-        category = cls._find_category(interface, category)
+    def _find_member(cls, interface: str, category: str, member: str) -> '_Member':
+        members = cls._find_category(interface, category)
         try:
-            return category[member]
+            return members[member]
         except KeyError as exc:
             raise Object.Method.Unhandled from exc
 
@@ -621,7 +669,7 @@ class Interface:
         def _describe(self) -> Dict[str, Any]:
             return {'type': self._type.typestring, 'flags': 'r' if self._setter is None else 'w'}
 
-        def __get__(self, obj: 'org_freedesktop_DBus_Properties', cls: Optional[type] = None) -> Any:
+        def __get__(self, obj: 'Object', cls: Optional[type] = None) -> Any:
             assert self._name is not None
             if obj is None:
                 return self
@@ -637,7 +685,7 @@ class Interface:
                                      f"was not properly initialised: use either the 'value=' kwarg or "
                                      f"the @'{self._python_name}.getter' decorator")
 
-        def __set__(self, obj: 'org_freedesktop_DBus_Properties', value: Any) -> None:
+        def __set__(self, obj: 'Object', value: Any) -> None:
             assert self._name is not None
             if self._getter is not None:
                 raise AttributeError(f"Cannot directly assign '{obj.__class__.__name__}' "
@@ -648,10 +696,10 @@ class Interface:
             if obj._dbus_bus is not None:
                 obj.properties_changed(self._interface, {self._name: bustypes.Variant(value, self._type)}, [])
 
-        def to_dbus(self, obj):
+        def to_dbus(self, obj: 'Object') -> bustypes.Variant:
             return bustypes.Variant(self.__get__(obj), self._type)
 
-        def from_dbus(self, obj, value):
+        def from_dbus(self, obj: 'Object', value: bustypes.Variant) -> None:
             if self._setter is None or self._type != value.type:
                 raise Object.Method.Unhandled
             self._setter.__get__(obj)(value.value)
@@ -691,11 +739,12 @@ class Interface:
         def _describe(self) -> Dict[str, Any]:
             return {'in': self._type.typestrings}
 
-        def __get__(self, obj: Any, cls: Optional[type] = None) -> Callable[..., None]:
+        def __get__(self, obj: 'Object', cls: Optional[type] = None) -> Callable[..., None]:
             def emitter(obj: Object, *args: Any) -> None:
                 assert self._interface is not None
                 assert self._name is not None
                 assert obj._dbus_bus is not None
+                assert obj._dbus_path is not None
                 message = obj._dbus_bus.message_new_signal(obj._dbus_path, self._interface, self._name)
                 self._type.write(message, *args)
                 message.send()
@@ -724,7 +773,7 @@ class Interface:
             method call remains unhandled."""
             pass
 
-        def __init__(self, out_types=(), in_types=(), name=None):
+        def __init__(self, out_types: Sequence[str] = (), in_types: Sequence[str] = (), name: Optional[str] = None):
             super().__init__(name=name)
             self._out_type = bustypes.MessageType(out_types)
             self._in_type = bustypes.MessageType(in_types)
@@ -757,12 +806,12 @@ class Interface:
 class org_freedesktop_DBus_Peer(Interface):
     @Interface.Method()
     @staticmethod
-    def ping():
+    def ping() -> None:
         pass
 
     @Interface.Method('s')
     @staticmethod
-    def get_machine_id():
+    def get_machine_id() -> str:
         with open('/etc/machine-id', encoding='ascii') as file:
             return file.read().strip()
 
@@ -770,7 +819,7 @@ class org_freedesktop_DBus_Peer(Interface):
 class org_freedesktop_DBus_Introspectable(Interface):
     @Interface.Method('s')
     @classmethod
-    def introspect(cls):
+    def introspect(cls) -> str:
         return introspection.to_xml(cls._dbus_interfaces)
 
 
@@ -805,11 +854,13 @@ class Object(org_freedesktop_DBus_Introspectable,
     mix.  See the documentation for Interface to find out how to define and
     implement your D-Bus interface.
     """
-    def message_received(self, message):
-        interface = message.get_interface(message)
-        method = message.get_member()
+    def message_received(self, message: BusMessage) -> bool:
+        interface = message.get_interface()
+        name = message.get_member()
 
         try:
-            return self._find_member(interface, 'methods', method)._invoke(self, message)
+            method = self._find_member(interface, 'methods', name)
+            assert isinstance(method, Interface.Method)
+            return method._invoke(self, message)
         except Object.Method.Unhandled:
             return False

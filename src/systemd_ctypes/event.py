@@ -18,26 +18,30 @@
 import asyncio
 import selectors
 import sys
+from typing import Callable, ClassVar, Coroutine, List, Optional, Tuple
 
-from ctypes import byref
+from .librarywrapper import byref
 
 from . import inotify
 from . import libsystemd
 
 
 class Event(libsystemd.sd_event):
-    _default_instance = None
+    InotifyHandler = Callable[[inotify.Event, int, Optional[str]], None]
+    _default_instance: ClassVar[Optional['Event']] = None
 
     @staticmethod
-    def default():
+    def default() -> 'Event':
         if Event._default_instance is None:
             Event._default_instance = Event()
-            Event._default(Event._default_instance)
+            Event._default(byref(Event._default_instance))
         return Event._default_instance
 
-    def add_inotify(self, path, mask, handler):
+    def add_inotify(
+            self, path: str, mask: inotify.Event, handler: InotifyHandler
+    ) -> libsystemd.sd_event_source:
         @libsystemd.sd_event_inotify_handler_t
-        def wrapper(source, _event, userdata):
+        def wrapper(source, _event, userdata) -> int:
             event = _event.contents
             handler(inotify.Event(event.mask), event.cookie, event.name if event.len else None)
             return 0
@@ -57,12 +61,14 @@ class Event(libsystemd.sd_event):
 #
 # Hack a selector subclass which calls prepare() before sleeping and this for us.
 class Selector(selectors.DefaultSelector):
-    def __init__(self, event=None):
+    def __init__(self, event: Optional[Event] = None) -> None:
         super().__init__()
         self.sd_event = event or Event.default()
         self.key = self.register(self.sd_event.get_fd(), selectors.EVENT_READ)
 
-    def select(self, timeout=None):
+    def select(
+            self, timeout: Optional[float] = None
+    ) -> List[Tuple[selectors.SelectorKey, int]]:
         while self.sd_event.prepare():
             self.sd_event.dispatch()
         ready = super().select(timeout)
@@ -72,16 +78,16 @@ class Selector(selectors.DefaultSelector):
             self.sd_event.dispatch()
             while self.sd_event.prepare():
                 self.sd_event.dispatch()
-        # NB: this could return zero events with infinite timeout, but nobody seems to mind.
+        # This could return zero events with infinite timeout, but nobody seems to mind.
         return [(key, events) for (key, events) in ready if key != self.key]
 
 
 class EventLoopPolicy(asyncio.DefaultEventLoopPolicy):
-    def new_event_loop(self):
+    def new_event_loop(self) -> asyncio.AbstractEventLoop:
         return asyncio.SelectorEventLoop(Selector())
 
 
-def run_async(main, debug=None):
+def run_async(main: Coroutine[None, None, None], debug: Optional[bool] = None) -> None:
     asyncio.set_event_loop_policy(EventLoopPolicy())
 
     polyfill = sys.version_info < (3, 7, 0) and not hasattr(asyncio, 'run')
@@ -97,14 +103,16 @@ def run_async(main, debug=None):
 
         assert not hasattr(asyncio, 'run')
 
-        def run(main, debug=None):
+        def run(
+                main: Coroutine[None, None, None], debug: Optional[bool] = None
+        ) -> None:
             if debug is not None:
                 loop.set_debug(debug)
             loop.run_until_complete(main)
 
-        asyncio.run = run
+        asyncio.run = run  # type: ignore[assignment]
 
-        asyncio._systemd_ctypes_polyfills = True
+        asyncio._systemd_ctypes_polyfills = True  # type: ignore[attr-defined]
 
     asyncio.run(main, debug=debug)
 

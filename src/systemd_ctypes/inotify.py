@@ -28,7 +28,7 @@ class inotify_event(ctypes.Structure):
     ]
 
     @property
-    def name(self):
+    def name(self) -> str:
         class event_with_name(ctypes.Structure):
             _fields_ = [*inotify_event._fields_, ('name', ctypes.c_char * self.len)]
         return ctypes.cast(ctypes.addressof(self), ctypes.POINTER(event_with_name)).contents.name
