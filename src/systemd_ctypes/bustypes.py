@@ -38,32 +38,12 @@ import functools
 import inspect
 import json
 import re
-import typing
 
 from enum import Enum
 from typing import Callable, ClassVar, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
-try:
-    from typing import TypeGuard
-except ImportError:
-    TypeGuard = {'BusType.objectpath': bool, 'BusType.signature': bool}
-
-
-try:
-    from typing import Annotated
-except ImportError:
-    import collections
-
-    class Annotation:
-        def __init__(self, origin, metadata):
-            self.__metadata__ = [metadata]
-
-    class AnnotatedType(collections.defaultdict):
-        def __missing__(self, key):
-            return Annotation(*key)
-
-    Annotated = AnnotatedType()
-
+from . import typing
+from .typing import Annotated, TypeGuard
 
 libsystemd = ctypes.CDLL('libsystemd.so.0')
 
@@ -460,9 +440,9 @@ _base_equivalence_map: Dict[type, BusType] = {
 }
 
 _factory_map: Dict[object, Callable[..., Type]] = {
-    dict: DictionaryType, typing.Dict: DictionaryType,
-    list: ArrayType, typing.List: ArrayType,
-    tuple: StructType, typing.Tuple: StructType,
+    dict: DictionaryType, Dict: DictionaryType,
+    list: ArrayType, List: ArrayType,
+    tuple: StructType, Tuple: StructType,
 }
 
 
@@ -481,7 +461,7 @@ def from_annotation(annotation: Union[str, type, BusType]) -> Type:
 
     # Our own BusType types
     if isinstance(annotation, BusType):
-        return annotation.value.__metadata__[0]
+        return typing.get_args(annotation.value)[1]
 
     # Container types
     try:
