@@ -44,15 +44,9 @@ def parse_interface(interface):
     }
 
 
-def parse_xml(xml, interface_names=None):
+def parse_xml(xml):
     et = ET.fromstring(xml)
-
-    if interface_names is not None:
-        predicate = lambda tag: tag.attrib['name'] in interface_names
-    else:
-        predicate = lambda tag: True
-
-    return {tag.attrib['name']: parse_interface(tag) for tag in et.findall('interface') if predicate(tag)}
+    return {tag.attrib['name']: parse_interface(tag) for tag in et.findall('interface')}
 
 
 # Pretend like this is a little bit functional
