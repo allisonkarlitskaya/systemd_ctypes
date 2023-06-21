@@ -347,10 +347,10 @@ class DictionaryType(ContainerType):
     def get_writer(self, a, item_type, e, type_contents, open_container, close_container, key_writer, value_writer):
         def dict_writer(message: libsystemd.sd_bus_message, value: object) -> None:
             open_container(message, a, item_type)                    # array
-            for key, value in value.items():  # type: ignore[attr-defined] # can raise AttributeError
+            for key, val in value.items():  # type: ignore[attr-defined] # can raise AttributeError
                 open_container(message, e, type_contents)              # entry
                 key_writer(message, key)                                 # key
-                value_writer(message, value)                             # value
+                value_writer(message, val)                               # value
                 close_container(message)                               # end entry
             close_container(message)                                 # end array
         return dict_writer
@@ -475,7 +475,7 @@ def from_annotation(annotation: Union[str, type, BusType]) -> Type:
         args = [from_annotation(arg) for arg in typing.get_args(annotation)]
         return factory(*args)
     except (AssertionError, AttributeError, KeyError, TypeError):
-        raise TypeError(f"Cannot interpret {annotation} as a dbus type")
+        raise TypeError(f"Cannot interpret {annotation} as a dbus type") from None
 
 
 _base_typestring_map: Dict[str, Type] = {

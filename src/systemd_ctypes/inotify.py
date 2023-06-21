@@ -21,12 +21,12 @@ from typing import Optional
 
 
 class inotify_event(ctypes.Structure):
-    _fields_ = [
+    _fields_ = (
         ('wd', ctypes.c_int32),
         ('mask', ctypes.c_uint32),
         ('cookie', ctypes.c_uint32),
         ('len', ctypes.c_uint32),
-    ]
+    )
 
     @property
     def name(self) -> Optional[bytes]:
@@ -34,7 +34,7 @@ class inotify_event(ctypes.Structure):
             return None
 
         class event_with_name(ctypes.Structure):
-            _fields_ = [*inotify_event._fields_, ('name', ctypes.c_char * self.len)]
+            _fields_ = (*inotify_event._fields_, ('name', ctypes.c_char * self.len))
 
         name = ctypes.cast(ctypes.addressof(self), ctypes.POINTER(event_with_name)).contents.name
         assert isinstance(name, bytes)

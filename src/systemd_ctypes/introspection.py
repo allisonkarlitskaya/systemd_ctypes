@@ -56,7 +56,7 @@ def element(tag, children=(), **kwargs):
     return tag
 
 
-def method(name, method_info):
+def method_to_xml(name, method_info):
     return element('method', name=name,
                    children=[
                        element('arg', type=arg_type, direction=direction)
@@ -65,28 +65,28 @@ def method(name, method_info):
                    ])
 
 
-def property(name, property_info):
+def property_to_xml(name, property_info):
     return element('property', name=name,
                    access='write' if property_info['flags'] == 'w' else 'read',
                    type=property_info['type'])
 
 
-def signal(name, signal_info):
+def signal_to_xml(name, signal_info):
     return element('signal', name=name,
                    children=[
                        element('arg', type=arg_type) for arg_type in signal_info['in']
                    ])
 
 
-def interface(name, interface_info):
+def interface_to_xml(name, interface_info):
     return element('interface', name=name,
                    children=[
-                       *(method(name, info) for name, info in interface_info['methods'].items()),
-                       *(property(name, info) for name, info in interface_info['properties'].items()),
-                       *(signal(name, info) for name, info in interface_info['signals'].items()),
+                       *(method_to_xml(name, info) for name, info in interface_info['methods'].items()),
+                       *(property_to_xml(name, info) for name, info in interface_info['properties'].items()),
+                       *(signal_to_xml(name, info) for name, info in interface_info['signals'].items()),
                    ])
 
 
 def to_xml(interfaces):
-    node = element('node', children=(interface(name, members) for name, members in interfaces.items()))
+    node = element('node', children=(interface_to_xml(name, members) for name, members in interfaces.items()))
     return ET.tostring(node, encoding='unicode')

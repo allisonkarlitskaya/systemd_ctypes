@@ -20,12 +20,10 @@ import errno
 import os
 import tempfile
 import unittest
-
 from unittest.mock import MagicMock
 
 import systemd_ctypes
 from systemd_ctypes.inotify import Event
-
 
 with open("/etc/os-release") as f:
     os_release = f.read()
@@ -38,7 +36,7 @@ class TestPathWatch(unittest.TestCase):
 
     def async_wait_cond(self, cond):
         async def _call():
-            for retry in range(50):
+            for _ in range(50):
                 if cond():
                     break
                 await asyncio.sleep(0.1)

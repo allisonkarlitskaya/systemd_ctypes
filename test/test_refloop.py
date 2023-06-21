@@ -1,9 +1,9 @@
 import errno
 import gc
 import os
+import socket
 import unittest
 
-import socket
 from systemd_ctypes import bus
 
 
