@@ -39,12 +39,11 @@ import inspect
 import json
 import re
 from enum import Enum
-from typing import Any, Callable, ClassVar, Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, ClassVar, Dict, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union
 
-from . import typing
+from . import libsystemd, typing
 from .typing import Annotated, TypeGuard
 
-libsystemd = ctypes.CDLL('libsystemd.so.0')
 _object_path_re = re.compile(r'/|(/[A-Za-z0-9_]+)+')
 
 
@@ -55,7 +54,7 @@ def is_object_path(candidate: str) -> TypeGuard['BusType.objectpath']:
 def is_signature(candidate: str) -> TypeGuard['BusType.signature']:
     offset = 0
 
-    def maybe_pop(acceptable) -> Optional[str]:
+    def maybe_pop(acceptable: str) -> Optional[str]:
         nonlocal offset
         char = candidate[offset]
         if char in acceptable:
@@ -64,7 +63,7 @@ def is_signature(candidate: str) -> TypeGuard['BusType.signature']:
         else:
             return None
 
-    def pop(acceptable) -> str:
+    def pop(acceptable: str) -> str:
         char = maybe_pop(acceptable)
         assert char is not None
         return char
@@ -94,7 +93,7 @@ def is_signature(candidate: str) -> TypeGuard['BusType.signature']:
 def yield_base_helpers() -> Iterable[Tuple[str, object]]:
     for method in ['enter_container', 'exit_container', 'open_container', 'close_container',
                    'append_basic', 'read_basic', 'append_array', 'read_array']:
-        yield method, getattr(libsystemd, f'sd_bus_message_{method}')
+        yield method, libsystemd.libsystemd[f'sd_bus_message_{method}']
 
     for name in ['size_t', 'char_p']:
         instance = getattr(ctypes, f'c_{name}')()
@@ -113,8 +112,10 @@ def yield_base_helpers() -> Iterable[Tuple[str, object]]:
 
 _base_helpers = dict(yield_base_helpers())
 
+T = TypeVar('T')
 
-def call_with_kwargs(func, kwargs):
+
+def call_with_kwargs(func: Callable[..., T], kwargs: Dict[str, Any]) -> T:
     parameters = set(inspect.signature(func).parameters)
     return func(**{key: value for key, value in kwargs.items() if key in parameters})
 
@@ -125,6 +126,8 @@ class Type:
     __slots__ = 'typestring', 'bytes_typestring', 'writer', 'reader'
     typestring: str
     bytes_typestring: bytes
+    reader: Callable[[libsystemd.sd_bus_message], object]
+    writer: Callable[[libsystemd.sd_bus_message, object], None]
 
     def __new__(cls, *args: Any) -> 'Type':
         instance = Type._cache.get((cls, args))
@@ -141,7 +144,7 @@ class Type:
         self.writer = call_with_kwargs(self.get_writer, kwargs)
         self.reader = call_with_kwargs(self.get_reader, kwargs)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}('{self.typestring}')"
 
     def get_writer(self, **kwargs: object) -> Callable[[object, object], None]:
@@ -161,7 +164,7 @@ class BasicType(Type):
                          variable=variable, reference=ctypes.byref(variable), **kwargs)
 
     def get_reader(self, read_basic, type_constant, variable, reference, getter):
-        def basic_reader(message):
+        def basic_reader(message: libsystemd.sd_bus_message) -> object:
             if read_basic(message, type_constant, reference) <= 0:
                 raise StopIteration
             return getter(variable)
@@ -172,7 +175,7 @@ class FixedType(BasicType):
     __slots__ = ()
 
     def get_writer(self, append_basic, type_constant, variable, reference, setter, getter):
-        def fixed_writer(message, value):
+        def fixed_writer(message: libsystemd.sd_bus_message, value: object) -> None:
             setter(variable, value)
             if getter(variable) != value:
                 raise TypeError(f"Cannot represent value {value} with type '{self.typestring}'")
@@ -183,25 +186,30 @@ class FixedType(BasicType):
 class StringLikeType(BasicType):
     __slots__ = ()
 
+    @staticmethod
+    def get_guarded_conversion(typestring: str, guard: Callable[[str], bool]) -> Callable[[object], bytes]:
+        def convert(candidate: object) -> bytes:
+            if not isinstance(candidate, str):
+                raise TypeError(f"'{typestring}' encodes 'str', not '{candidate.__class__.__name__}'")
+            if not guard(candidate):
+                raise ValueError(f"Invalid value provided for type '{typestring}'")
+            return str.encode(candidate)
+        return convert
+
     def __init__(self, typestring: str, guard: Optional[Callable[[str], bool]] = None):
         # https://docs.python.org/3/c-api/unicode.html#c.PyUnicode_FromString
         to_unicode = ctypes.pythonapi.PyUnicode_FromString
         to_unicode.restype = ctypes.py_object
 
         if guard is not None:
-            def convert(candidate):
-                if not isinstance(candidate, str):
-                    raise TypeError(f"'{self.typestring}' encodes 'str', not '{candidate.__class__.__name__}'")
-                if not guard(candidate):
-                    raise ValueError(f"Invalid value provided for type '{self.typestring}'")
-                return str.encode(candidate)
+            convert = StringLikeType.get_guarded_conversion(typestring, guard)
         else:
-            convert = str.encode
+            convert = str.encode  # type: ignore[assignment] # can throw TypeError on call
 
         super().__init__(typestring, ctypes.c_char_p, to_unicode, convert=convert)
 
     def get_writer(self, append_basic, type_constant, convert):
-        def string_writer(message, value):
+        def string_writer(message: libsystemd.sd_bus_message, value: object) -> None:
             append_basic(message, type_constant, convert(value))
         return string_writer
 
@@ -210,7 +218,7 @@ class BytestringType(Type):
     __slots__ = ()
 
     def get_writer(self, append_array, y, size_t_setter, size_t):
-        def bytes_writer(message, value):
+        def bytes_writer(message: libsystemd.sd_bus_message, value: object) -> None:
             if not isinstance(value, bytes):
                 if isinstance(value, str):
                     try:
@@ -239,7 +247,7 @@ class ContainerType(Type):
     __slots__ = 'item_types'
     item_types: Sequence[Type]
 
-    def __init__(self, *item_types: Type, **kwargs):
+    def __init__(self, *item_types: Type, **kwargs: Any):
         assert len(item_types) > 0
         item_typestrings = ''.join(item.typestring for item in item_types)
         self.item_types = item_types
@@ -252,17 +260,17 @@ class ArrayType(ContainerType):
     _typestring_template = 'a_'
     __slots__ = ()
 
-    def __init__(self, item_type):
+    def __init__(self, item_type: Type):
         super().__init__(item_type,
                          item_writer=item_type.writer,
                          item_reader=item_type.reader,
                          list_append=list.append)
 
     def get_reader(self, enter_container, exit_container, list_append, item_reader):
-        def array_reader(message):
+        def array_reader(message: libsystemd.sd_bus_message) -> object:
             if enter_container(message, 0, None) <= 0:
                 raise StopIteration
-            result = []
+            result: List[object] = []
             try:
                 while True:
                     list_append(result, item_reader(message))
@@ -273,9 +281,9 @@ class ArrayType(ContainerType):
         return array_reader
 
     def get_writer(self, a, type_contents, open_container, close_container, item_writer):
-        def array_writer(message, value):
+        def array_writer(message: libsystemd.sd_bus_message, value: object) -> None:
             open_container(message, a, type_contents)
-            for item in value:
+            for item in value:  # type: ignore[attr-defined] # can throw TypeError
                 item_writer(message, item)
             close_container(message)
         return array_writer
@@ -288,7 +296,7 @@ class StructType(ContainerType):
     def get_reader(self, enter_container, exit_container):
         item_readers = tuple(item_type.reader for item_type in self.item_types)
 
-        def array_reader(message):
+        def array_reader(message: libsystemd.sd_bus_message) -> object:
             if enter_container(message, 0, None) <= 0:
                 raise StopIteration
             result = tuple(item_reader(message) for item_reader in item_readers)
@@ -299,11 +307,12 @@ class StructType(ContainerType):
     def get_writer(self, r, type_contents, open_container, close_container):
         item_writers = tuple(item_type.writer for item_type in self.item_types)
 
-        def struct_writer(message, value):
-            if len(value) != len(item_writers):
-                raise TypeError(f"Wrong numbers of items ({len(value)}) for structure type '{self.typestring}'")
+        def struct_writer(message: libsystemd.sd_bus_message, value: object) -> None:
+            n_items = len(value)  # type: ignore[arg-type] # can throw TypeError
+            if n_items != len(item_writers):
+                raise TypeError(f"Wrong numbers of items ({n_items}) for structure type '{self.typestring}'")
             open_container(message, r, type_contents)
-            for item_writer, item in zip(item_writers, value):
+            for item_writer, item in zip(item_writers, value):  # type: ignore[call-overload] # can throw TypeError
                 item_writer(message, item)
             close_container(message)
         return struct_writer
@@ -313,7 +322,7 @@ class DictionaryType(ContainerType):
     _typestring_template = 'a{_}'
     __slots__ = ()
 
-    def __init__(self, key_type, value_type, **kwargs):
+    def __init__(self, key_type: Type, value_type: Type):
         assert isinstance(key_type, BasicType)
         item_type = '{' + key_type.typestring + value_type.typestring + '}'
         super().__init__(key_type, value_type,
@@ -322,7 +331,7 @@ class DictionaryType(ContainerType):
                          item_type=ctypes.c_char_p(item_type.encode('ascii')))
 
     def get_reader(self, enter_container, exit_container, key_reader, value_reader):
-        def dict_reader(message):
+        def dict_reader(message: libsystemd.sd_bus_message) -> object:
             if enter_container(message, 0, None) <= 0:    # array
                 raise StopIteration
             result = {}
@@ -336,9 +345,9 @@ class DictionaryType(ContainerType):
         return dict_reader
 
     def get_writer(self, a, item_type, e, type_contents, open_container, close_container, key_writer, value_writer):
-        def dict_writer(message, value):
+        def dict_writer(message: libsystemd.sd_bus_message, value: object) -> None:
             open_container(message, a, item_type)                    # array
-            for key, value in value.items():
+            for key, value in value.items():  # type: ignore[attr-defined] # can raise AttributeError
                 open_container(message, e, type_contents)              # entry
                 key_writer(message, key)                                 # key
                 value_writer(message, value)                             # value
@@ -351,7 +360,7 @@ class VariantType(Type):
     __slots__ = ()
 
     def get_reader(self, enter_container, exit_container):
-        def variant_reader(message):
+        def variant_reader(message: libsystemd.sd_bus_message) -> object:
             if enter_container(message, 0, None) <= 0:
                 raise StopIteration
             typestring = message.get_signature(False)
@@ -362,14 +371,14 @@ class VariantType(Type):
         return variant_reader
 
     def get_writer(self, open_container, close_container, v):
-        def variant_writer(message, value):
+        def variant_writer(message: libsystemd.sd_bus_message, value: object) -> None:
             if isinstance(value, Variant):
                 type_ = value.type
                 contents = value.value
             else:
                 try:
-                    type_, = from_signature(value['t'])
-                    contents = value['v']
+                    type_, = from_signature(value['t'])  # type: ignore[index] # can throw TypeError
+                    contents = value['v']  # type: ignore[index] # can throw TypeError
                 except KeyError as exc:
                     raise TypeError("'v' can encode Variant objects, or mappings with 't' and 'v' keys") from exc
 
@@ -381,8 +390,10 @@ class VariantType(Type):
 
 class Variant:
     __slots__ = 'type', 'value'
+    type: Type
+    value: object
 
-    def __init__(self, value, hint=None):
+    def __init__(self, value: object, hint: object = None):
         if isinstance(hint, Type):
             self.type = hint
         elif isinstance(hint, str):
@@ -391,16 +402,18 @@ class Variant:
             self.type = from_annotation(hint or value.__class__)
         self.value = value
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"systemd_ctypes.Variant({self.value}, '{self.type.typestring}')"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, Variant):
             return self.type == other.type and self.value == other.value
-        else:
+        elif isinstance(other, dict):
             return (self.type,) == from_signature(other['t']) and self.value == other['v']
+        else:
+            return False
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.type) ^ hash(self.value)
 
 
@@ -421,7 +434,8 @@ class BusType(Enum):
     variant = Annotated[dict, VariantType('v')]
 
 
-_base_equivalence_map: Dict[type, BusType] = {
+# mypy gets confused by enums, so just use Any
+_base_equivalence_map: Dict[type, Any] = {
     bool: BusType.boolean,
     bytes: BusType.bytestring,
     int: BusType.int32,
@@ -451,12 +465,14 @@ def from_annotation(annotation: Union[str, type, BusType]) -> Type:
 
     # Our own BusType types
     if isinstance(annotation, BusType):
-        return typing.get_args(annotation.value)[1]
+        bus_type = typing.get_args(annotation.value)[1]
+        assert isinstance(bus_type, Type)
+        return bus_type
 
     # Container types
     try:
-        factory = _factory_map[annotation.__origin__]
-        args = [from_annotation(arg) for arg in annotation.__args__]
+        factory = _factory_map[typing.get_origin(annotation)]
+        args = [from_annotation(arg) for arg in typing.get_args(annotation)]
         return factory(*args)
     except (AssertionError, AttributeError, KeyError, TypeError):
         raise TypeError(f"Cannot interpret {annotation} as a dbus type")
@@ -471,7 +487,7 @@ _base_typestring_map: Dict[str, Type] = {
 def from_signature(signature: str) -> Tuple[Type, ...]:
     stack = list(reversed(signature))
 
-    def get_one():
+    def get_one() -> Type:
         first = stack.pop()
         if first == 'a':
             if stack[-1] == 'y':
@@ -486,13 +502,13 @@ def from_signature(signature: str) -> Tuple[Type, ...]:
 
         return _base_typestring_map[first]
 
-    def get_several(end):
+    def get_several(end: str) -> Iterable[Type]:
         yield get_one()
         while stack[-1] != end:
             yield get_one()
         stack.pop()
 
-    def get_all():
+    def get_all() -> Iterable[Type]:
         while stack:
             yield get_one()
 
@@ -507,22 +523,22 @@ class MessageType:
     typestrings: List[str]
     signature: str
 
-    def __init__(self, item_types):
+    def __init__(self, item_types: Sequence[Union[str, type, BusType]]):
         self.item_types = [from_annotation(item_type) for item_type in item_types]
         self.typestrings = [item_type.typestring for item_type in self.item_types]
         self.signature = ''.join(self.typestrings)
 
-    def write(self, message, *items):
+    def write(self, message: libsystemd.sd_bus_message, *items: object) -> None:
         assert len(items) == len(self.item_types)
         for item_type, item in zip(self.item_types, items):
             item_type.writer(message, item)
 
-    def read(self, message):
+    def read(self, message: libsystemd.sd_bus_message) -> Optional[Tuple[object, ...]]:
         if not message.has_signature(self.signature):
             return None
         return tuple(item_type.reader(message) for item_type in self.item_types)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.item_types)
 
 
