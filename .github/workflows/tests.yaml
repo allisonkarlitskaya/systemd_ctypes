@@ -27,15 +27,18 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Clone repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install build and test dependencies
         run: |
           if type apt >/dev/null 2>&1; then
               apt-get update
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                  flit \
                   libsystemd0 \
                   python3-dbusmock \
+                  python3-pytest \
+                  python3-pytest-cov \
                   tox
           elif grep -q platform:el /etc/os-release; then
               dnf install -y \
@@ -44,17 +47,23 @@ jobs:
                   dbus-daemon \
                   systemd-libs
               pip3 install \
+                  flit \
+                  pytest \
+                  pytest-cov \
+                  python-dbusmock \
                   tox
           else
               dnf install -y \
                   python3-dbusmock \
-                  python3-flake8 \
+                  python3-flit \
+                  python3-pytest \
+                  python3-pytest-cov \
                   systemd-libs \
                   tox
           fi
 
-      - name: Run tests
-        run: tox -e py3 -- -v
+      - name: Run unit tests
+        run: tox -e pytest -- -vv --cov
 
   arch:
     runs-on: ubuntu-latest
@@ -71,9 +80,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Clone repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: Run test
+      - name: Run unit tests
         uses: uraimo/run-on-arch-action@v2
         with:
           distro: ubuntu_latest
@@ -81,33 +90,46 @@ jobs:
           install: |
             apt-get update
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                flit \
                 libsystemd0 \
                 python3-dbusmock \
+                python3-pytest-cov \
                 tox
-          run: tox -e py3 -- -v
+          run: tox -e pytest -- -vv --cov
 
-  pyver:
+  venv:
     runs-on: ubuntu-latest
     permissions: {}
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.7', '3.8', '3.9', '3.10']
+    container:
+      image: registry.fedoraproject.org/fedora:38
     timeout-minutes: 10
     steps:
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-
       - name: Install system dependencies
-        run: sudo apt install libdbus-1-dev
-
-      - name: Install python dependencies
-        run: pip install --user pip tox
+        run: sudo dnf install -y dbus-daemon dbus-devel gcc glib2-devel tox
 
       - name: Clone repository
         uses: actions/checkout@v3
 
-      - name: Run test
-        run: tox -e py"$(echo ${{ matrix.python-version }} | tr -d .)" -- -v
+      - name: Run unit tests
+        run: tox -e py36-pytest,py37-pytest,py38-pytest,py39-pytest,py310-pytest,py311-pytest,py312-pytest
+
+  lint:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Install system dependencies
+        run: sudo apt install libdbus-1-dev
+
+      - name: Install tox
+        run: sudo apt-get install -y tox
+
+      - name: Clone repository
+        uses: actions/checkout@v3
+
+      - name: Run code checks
+        run: tox -e py311-mypy,py311-pycodestyle,py311-ruff

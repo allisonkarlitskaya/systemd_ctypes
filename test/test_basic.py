@@ -18,8 +18,9 @@
 import tempfile
 import unittest
 
-import dbusmock
+import dbusmock  # type: ignore[import] # not typed
 import json
+
 import systemd_ctypes
 from systemd_ctypes import introspection, bus
 
