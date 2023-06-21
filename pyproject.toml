@@ -16,17 +16,12 @@ Home = "https://github.com/allisonkarlitskaya/systemd_ctypes/"
 [tool.mypy]
 mypy_path = 'src'
 
-[tool.pylint]
-max-line-length = 118
-disable = [
-  "R0903",  # Too few public methods
-  "R1705",  # Unnecessary "else" after "return"
-  "W1113",  # Keyword argument before variable positional arguments  (PEP-570 is Python 3.8)
-]
-
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 log_cli = true
+
+[tool.ruff]
+line-length = 118
 
 [tool.coverage.paths]
 source = ["src", "*/site-packages"]
@@ -46,19 +41,31 @@ exclude_lines = [
 [tool.tox]
 legacy_tox_ini = """
 [tox]
+envlist = mypy,pycodestyle,ruff,pytest
 isolated_build = True
-envlist = site
 
+# The default test environments use system packages and never PyPI.
+[testenv:{mypy,pycodestyle,ruff,pytest,pkg}]
+sitepackages = True
+install_command = python3 -m pip install --no-index --no-build-isolation {opts} {packages}
+wheel_build_env = pkg
+
+# All other environments (names like py311-mypy, py36-pytest, etc) are isolated
+# from the system and get their packages from PyPI, according to the specific
+# test environment being requested.  We build the wheel in a common environment.
 [testenv]
-sitepackages = true
-deps=
-  pyflakes
-  pytest-cov
-  python-dbusmock
+package = wheel
+wheel_build_env = venv-pkg
+skip_install = mypy,pycodestyle,ruff: True
+deps =
+  pytest,mypy: pytest-cov
+  pytest,mypy: python-dbusmock
+  mypy: mypy
+  pycodestyle: pycodestyle
+  ruff: ruff
 commands =
-  python3 -m pyflakes src/systemd_ctypes test
-  python3 -m pytest -opythonpath= --cov {posargs}
-
-[testenv:site]
-deps=
+  pytest: python3 -m pytest -opythonpath= {posargs:--cov}
+  ruff: python3 -m ruff {posargs:src test}
+  mypy: python3 -m mypy {posargs:src test}
+  pycodestyle: python3 -m pycodestyle --max-line-length=118 {posargs:src test}
 """
