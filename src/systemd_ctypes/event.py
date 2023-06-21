@@ -20,14 +20,21 @@ import selectors
 import sys
 from typing import Callable, ClassVar, Coroutine, List, Optional, Tuple
 
-from .librarywrapper import byref
+from .librarywrapper import Callback, Reference, UserData, byref
 
 from . import inotify
 from . import libsystemd
 
 
 class Event(libsystemd.sd_event):
-    InotifyHandler = Callable[[inotify.Event, int, Optional[str]], None]
+    class Source(libsystemd.sd_event_source):
+        callback: Callback
+        userdata: UserData = None
+
+        def cancel(self) -> None:
+            self._unref()
+            self.value = None
+
     _default_instance: ClassVar[Optional['Event']] = None
 
     @staticmethod
@@ -37,20 +44,24 @@ class Event(libsystemd.sd_event):
             Event._default(byref(Event._default_instance))
         return Event._default_instance
 
-    def add_inotify(
-            self, path: str, mask: inotify.Event, handler: InotifyHandler
-    ) -> libsystemd.sd_event_source:
-        @libsystemd.sd_event_inotify_handler_t
-        def wrapper(source, _event, userdata) -> int:
-            event = _event.contents
-            handler(inotify.Event(event.mask), event.cookie, event.name if event.len else None)
-            return 0
-        source = libsystemd.sd_event_source()
-        source.wrapper = wrapper
-        self._add_inotify(byref(source), path, mask, source.wrapper, None)
+    InotifyHandler = Callable[[inotify.Event, int, Optional[bytes]], None]
+
+    class InotifySource(Source):
+        def __init__(self, handler: 'Event.InotifyHandler') -> None:
+            def callback(source: libsystemd.sd_event_source,
+                         _event: Reference[inotify.inotify_event],
+                         userdata: UserData) -> int:
+                event = _event.contents
+                handler(inotify.Event(event.mask), event.cookie, event.name)
+                return 0
+            self.callback = libsystemd.sd_event_inotify_handler_t(callback)
+
+    def add_inotify(self, path: str, mask: inotify.Event, handler: InotifyHandler) -> InotifySource:
+        source = Event.InotifySource(handler)
+        self._add_inotify(byref(source), path, mask, source.callback, source.userdata)
         return source
 
-    def add_inotify_fd(self, fd, mask, handler):
+    def add_inotify_fd(self, fd: int, mask: inotify.Event, handler: InotifyHandler) -> InotifySource:
         # HACK: sd_event_add_inotify_fd() got added in 250, which is too new.  Fake it.
         return self.add_inotify(f'/proc/self/fd/{fd}', mask, handler)
 

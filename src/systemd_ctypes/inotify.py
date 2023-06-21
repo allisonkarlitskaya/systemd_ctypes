@@ -17,6 +17,7 @@
 
 import ctypes
 from enum import IntFlag, auto
+from typing import Optional
 
 
 class inotify_event(ctypes.Structure):
@@ -28,10 +29,16 @@ class inotify_event(ctypes.Structure):
     ]
 
     @property
-    def name(self) -> str:
+    def name(self) -> Optional[bytes]:
+        if self.len == 0:
+            return None
+
         class event_with_name(ctypes.Structure):
             _fields_ = [*inotify_event._fields_, ('name', ctypes.c_char * self.len)]
-        return ctypes.cast(ctypes.addressof(self), ctypes.POINTER(event_with_name)).contents.name
+
+        name = ctypes.cast(ctypes.addressof(self), ctypes.POINTER(event_with_name)).contents.name
+        assert isinstance(name, bytes)
+        return name
 
 
 class Event(IntFlag):
