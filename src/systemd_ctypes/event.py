@@ -20,10 +20,8 @@ import selectors
 import sys
 from typing import Callable, ClassVar, Coroutine, List, Optional, Tuple
 
+from . import inotify, libsystemd
 from .librarywrapper import Callback, Reference, UserData, byref
-
-from . import inotify
-from . import libsystemd
 
 
 class Event(libsystemd.sd_event):

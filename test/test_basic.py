@@ -15,15 +15,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import json
 import tempfile
 import unittest
 
 import dbusmock  # type: ignore[import] # not typed
-import json
 
 import systemd_ctypes
-from systemd_ctypes import introspection, bus
-
+from systemd_ctypes import bus, introspection
 
 TEST_ADDR = ('org.freedesktop.Test', '/', 'org.freedesktop.Test.Main')
 

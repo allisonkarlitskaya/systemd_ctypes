@@ -5,6 +5,7 @@ from fractions import Fraction
 from typing import List
 
 import pytest
+
 from systemd_ctypes import Bus, BusMessage, BusType, bustypes
 
 
@@ -18,7 +19,7 @@ def message(bus):
     return bus.message_new_method_call('x.y', '/y', 'z.a', 'a')
 
 
-@pytest.mark.parametrize('annotation,typestring', [
+@pytest.mark.parametrize(('annotation', 'typestring'), [
     (BusType.boolean, 'b'),
     (BusType.byte, 'y'),
     (BusType.int16, 'n'),
@@ -97,14 +98,14 @@ def test_simple(message: BusMessage) -> None:
 def test_bad_path(message: BusMessage) -> None:
     writer = bustypes.from_annotation(BusType.objectpath).writer
     writer(message, '/path')
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Invalid value provided for type 'o'"):
         writer(message, 'path')
 
 
 def test_bad_signature(message: BusMessage) -> None:
     writer = bustypes.from_annotation(BusType.signature).writer
     writer(message, 'a{sv}')
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Invalid value provided for type 'g'"):
         writer(message, 'a{vs}')
 
 
@@ -112,7 +113,7 @@ def test_bad_base64(message: BusMessage) -> None:
     writer = bustypes.from_annotation(BusType.bytestring).writer
     writer(message, '')
     writer(message, 'aaaa')
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="invalid base64"):
         writer(message, 'a')
 
 
@@ -120,11 +121,11 @@ def test_bad_mapping(message: BusMessage) -> None:
     writer = bustypes.from_annotation(typing.Dict[str, str]).writer
     writer(message, {})
     writer(message, {'a': 'b', 'c': 'd'})
-    with pytest.raises(AttributeError):
+    with pytest.raises(AttributeError, match="'set'.*'items'"):
         writer(message, {'a', 'b', 'c'})  # no '.items()'
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="'str'.*'int'"):
         writer(message, {1: 'a'})  # wrong key type
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="'str'.*'int'"):
         writer(message, {'a': 1})  # wrong value type
 
     class weird:
@@ -137,9 +138,9 @@ def test_bad_mapping(message: BusMessage) -> None:
     writer(message, weird([]))
     with pytest.raises(TypeError):
         writer(message, weird([1]))            # can't unpack '1' as key, value -- wrong type
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="not enough values to unpack"):
         writer(message, weird([()]))           # can't unpack () as key, value -- wrong value
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="too many values to unpack"):
         writer(message, weird([(1, 2, 3)]))    # ditto
 
 
@@ -154,7 +155,7 @@ one_half = Fraction(1, 2)
 one_third = Fraction(1, 3)
 
 
-@pytest.mark.parametrize('typestring,value', [
+@pytest.mark.parametrize(('typestring', 'value'), [
     ('y', 0), ('y', 255),
     ('n', -2**15), ('n', 2**15 - 1), ('q', 0), ('q', 2**16 - 1),
     ('i', -2**31), ('i', 2**31 - 1), ('u', 0), ('u', 2**32 - 1),
@@ -168,7 +169,7 @@ def test_number_limits(message: BusMessage, typestring: str, value: object) -> N
     assert x == value
 
 
-@pytest.mark.parametrize('typestring,value', [
+@pytest.mark.parametrize(('typestring', 'value'), [
     ('y', 256), ('y', -1), ('y', one_half),
     ('n', -2**15 - 1), ('n', 2**15), ('n', one_half), ('q', -1), ('q', 2**16), ('q', one_half),
     ('i', -2**31 - 1), ('i', 2**31), ('i', one_half), ('u', -1), ('u', 2**32), ('u', one_half),

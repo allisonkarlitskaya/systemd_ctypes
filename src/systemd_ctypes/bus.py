@@ -442,7 +442,8 @@ class BaseObject:
         :args: the arguments, according to the signature
         :returns: True
         """
-        assert self._dbus_bus is not None and self._dbus_path is not None
+        assert self._dbus_bus is not None
+        assert self._dbus_path is not None
         return self._dbus_bus.message_new_signal(self._dbus_path, interface, name, signature, *args).send()
 
     def message_received(self, message: BusMessage) -> bool:

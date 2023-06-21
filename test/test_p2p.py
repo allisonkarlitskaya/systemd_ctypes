@@ -1,10 +1,11 @@
 import asyncio
 import socket
-import pytest
 import unittest
 from tempfile import TemporaryDirectory
 
-from systemd_ctypes import bus, introspection, run_async, BusError
+import pytest
+
+from systemd_ctypes import BusError, bus, introspection, run_async
 
 
 class CommonTests:
