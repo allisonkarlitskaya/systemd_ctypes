@@ -145,14 +145,10 @@ class Type:
         return f"{self.__class__.__name__}('{self.typestring}')"
 
     def get_writer(self, **kwargs: object) -> Callable[[object, object], None]:
-        def not_implemented_writer(message, value):
-            raise NotImplementedError
-        return not_implemented_writer
+        raise NotImplementedError
 
     def get_reader(self, **kwargs: object) -> Callable[[object], object]:
-        def not_implemented_reader(message):
-            raise NotImplementedError
-        return not_implemented_reader
+        raise NotImplementedError
 
 
 class BasicType(Type):
