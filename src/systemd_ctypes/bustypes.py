@@ -38,16 +38,13 @@ import functools
 import inspect
 import json
 import re
-
 from enum import Enum
-from typing import Callable, ClassVar, Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, ClassVar, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 from . import typing
 from .typing import Annotated, TypeGuard
 
 libsystemd = ctypes.CDLL('libsystemd.so.0')
-
-
 _object_path_re = re.compile(r'/|(/[A-Za-z0-9_]+)+')
 
 
@@ -122,24 +119,21 @@ def call_with_kwargs(func, kwargs):
     return func(**{key: value for key, value in kwargs.items() if key in parameters})
 
 
-class _cached(type):
-    """Ensures that there's no more than a single instance corresponding to a given type."""
-    _cache: Dict[Tuple[type, tuple], object] = {}
+class Type:
+    _cache: ClassVar[Dict[Tuple[type, Tuple[object, ...]], 'Type']] = {}
 
-    def __call__(cls, *args):
-        instance = _cached._cache.get((cls, args))
-        if instance is None:
-            instance = super().__call__(*args)
-            _cached._cache[cls, args] = instance
-        return instance
-
-
-class Type(metaclass=_cached):
     __slots__ = 'typestring', 'bytes_typestring', 'writer', 'reader'
     typestring: str
     bytes_typestring: bytes
 
-    def __init__(self, typestring: str, **kwargs):
+    def __new__(cls, *args: Any) -> 'Type':
+        instance = Type._cache.get((cls, args))
+        if instance is None:
+            instance = object.__new__(cls)
+            Type._cache[(cls, args)] = instance
+        return instance
+
+    def __init__(self, typestring: str, **kwargs: Any):
         self.typestring = typestring
         self.bytes_typestring = typestring.encode('ascii')
 
