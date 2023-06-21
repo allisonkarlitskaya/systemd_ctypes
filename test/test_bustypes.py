@@ -1,10 +1,10 @@
 import binascii
 import ctypes
-import pytest
 import typing
-
 from fractions import Fraction
+from typing import List
 
+import pytest
 from systemd_ctypes import Bus, BusMessage, BusType, bustypes
 
 
@@ -246,3 +246,11 @@ def test_crossover_episode(typestring: str) -> None:
             worked += 1
 
     assert worked > 0
+
+
+def test_singleton_types() -> None:
+    # make sure each type has exactly one instance
+    str_list = bustypes.from_annotation(List[str])
+    tuple_str_list, = bustypes.from_signature('(asas)')
+    assert isinstance(tuple_str_list, bustypes.ContainerType)
+    assert all(str_list is item for item in tuple_str_list.item_types)
