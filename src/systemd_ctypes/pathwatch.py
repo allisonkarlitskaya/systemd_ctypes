@@ -17,8 +17,9 @@
 
 import errno
 import logging
-import stat
 import os
+import stat
+from typing import Any, List, Optional
 
 from .event import Event
 from .inotify import Event as IN
@@ -66,52 +67,59 @@ logger = logging.getLogger(__name__)
 class Handle(int):
     """An integer subclass that makes it easier to work with file descriptors"""
 
-    def __new__(cls, fd=-1):
+    def __new__(cls, fd: int = -1) -> 'Handle':
         return super(Handle, cls).__new__(cls, fd)
 
     # separate __init__() to set _needs_close mostly to keep pylint quiet
-    def __init__(self, fd=-1):
+    def __init__(self, fd: int = -1):
         super().__init__()
         self._needs_close = fd != -1
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return self != -1
 
-    def close(self):
+    def close(self) -> None:
         if self._needs_close:
             self._needs_close = False
             os.close(self)
 
-    def __eq__(self, value):
+    def __eq__(self, value: object) -> bool:
         if int.__eq__(self, value):  # also handles both == -1
             return True
+
+        if not isinstance(value, int):  # other object is not an int
+            return False
 
         if not self or not value:  # when only one == -1
             return False
 
         return os.path.sameopenfile(self, value)
 
-    def __del__(self):
+    def __del__(self) -> None:
         if self._needs_close:
             self.close()
 
-    def __enter__(self):
+    def __enter__(self) -> 'Handle':
         return self
 
-    def __exit__(self, _type, _value, _traceback):
+    def __exit__(self, _type: type, _value: object, _traceback: object) -> None:
         self.close()
 
     @classmethod
-    def open(cls, *args, **kwargs):
+    def open(cls, *args: Any, **kwargs: Any) -> 'Handle':
         return cls(os.open(*args, **kwargs))
 
-    def steal(self):
+    def steal(self) -> 'Handle':
         self._needs_close = False
         return self.__class__(int(self))
 
 
 class WatchInvalidator:
-    def event(self, mask, _cookie, name):
+    _name: bytes
+    _source: Optional[Event.Source]
+    _watch: Optional['PathWatch']
+
+    def event(self, mask: IN, _cookie: int, name: Optional[bytes]) -> None:
         logger.debug('invalidator event %s %s', mask, name)
         if self._watch is not None:
             # If this node itself disappeared, that's definitely an
@@ -120,7 +128,7 @@ class WatchInvalidator:
                 logger.debug('Invalidating!')
                 self._watch.invalidate()
 
-    def __init__(self, watch, event, dirfd, name):
+    def __init__(self, watch: 'PathWatch', event: Event, dirfd: int, name: str):
         self._watch = watch
         self._name = name.encode('utf-8')
 
@@ -129,49 +137,66 @@ class WatchInvalidator:
         # on a particular path component, or exceeding limits on watches
         try:
             mask = IN.CREATE | IN.DELETE | IN.MOVE | IN.DELETE_SELF | IN.IGNORED
-            self._slot = event.add_inotify_fd(dirfd, mask, self.event)
+            self._source = event.add_inotify_fd(dirfd, mask, self.event)
         except OSError:
-            self._slot = None
+            self._source = None
 
-    def close(self):
+    def close(self) -> None:
         # This is a little bit tricky: systemd doesn't have a specific close
         # API outside of unref, so let's make it as explicit as possible.
         self._watch = None
-        self._slot = None
+        self._source = None
 
 
-class PathStack(list):
-    def add_path(self, pathname):
+class PathStack(List[str]):
+    def add_path(self, pathname: str) -> None:
         # TO DO: consider doing something reasonable with trailing slashes
         # this is a stack, popped from the end: push components in reverse
         self.extend(item for item in reversed(pathname.split('/')) if item)
         if pathname.startswith('/'):
             self.append('/')
 
-    def __init__(self, path):
+    def __init__(self, path: str):
         super().__init__()
         self.add_path(path)
 
 
+class Listener:
+    def do_inotify_event(self, mask: IN, cookie: int, name: Optional[bytes]) -> None:
+        raise NotImplementedError
+
+    def do_identity_changed(self, fd: Optional[Handle], errno: Optional[int]) -> None:
+        raise NotImplementedError
+
+
 class PathWatch:
-    def __init__(self, path, listener, event=None):
+    _event: Event
+    _listener: Listener
+    _path: str
+    _invalidators: List[WatchInvalidator]
+    _errno: Optional[int]
+    _source: Optional[Event.Source]
+    _tag: Optional[None]
+    _fd: Handle
+
+    def __init__(self, path: str, listener: Listener, event: Optional[Event] = None):
         self._event = event or Event.default()
         self._path = path
         self._listener = listener
 
         self._invalidators = []
         self._errno = None
-        self._slot = None
+        self._source = None
         self._tag = None
         self._fd = Handle()
 
         self.invalidate()
 
-    def got_event(self, mask, cookie, name):
+    def got_event(self, mask: IN, cookie: int, name: Optional[bytes]) -> None:
         logger.debug('target event %s: %s %s %s', self._path, mask, cookie, name)
         self._listener.do_inotify_event(mask, cookie, name)
 
-    def invalidate(self):
+    def invalidate(self) -> None:
         for invalidator in self._invalidators:
             invalidator.close()
         self._invalidators = []
@@ -181,9 +206,9 @@ class PathWatch:
         except OSError as error:
             logger.debug('walk ended in error %d', error.errno)
 
-            if self._slot or self._fd or self._errno != error.errno:
+            if self._source or self._fd or self._errno != error.errno:
                 logger.debug('Ending existing watches.')
-                self._slot = None
+                self._source = None
                 self._fd.close()
                 self._fd = Handle()
                 self._errno = error.errno
@@ -200,20 +225,20 @@ class PathWatch:
                 return
 
             logger.debug('This file is new for us.  Removing old watch.')
-            self._slot = None
+            self._source = None
             self._fd.close()
             self._fd = fd.steal()
 
             try:
                 logger.debug('Establishing a new watch.')
-                self._slot = self._event.add_inotify_fd(self._fd, IN.CHANGED, self.got_event)
+                self._source = self._event.add_inotify_fd(self._fd, IN.CHANGED, self.got_event)
                 logger.debug('Watching successfully.  Notifying of new identity.')
                 self._listener.do_identity_changed(self._fd, None)
             except OSError as error:
                 logger.debug('Watching failed (%d).  Notifying of new identity.', error.errno)
                 self._listener.do_identity_changed(self._fd, error.errno)
 
-    def walk(self):
+    def walk(self) -> Handle:
         remaining_symlink_lookups = 40
         remaining_components = PathStack(self._path)
         dirfd = Handle()
@@ -249,9 +274,9 @@ class PathWatch:
         finally:
             dirfd.close()
 
-    def close(self):
+    def close(self) -> None:
         for invalidator in self._invalidators:
             invalidator.close()
         self._invalidators = []
-        self._slot = None
+        self._source = None
         self._fd.close()
