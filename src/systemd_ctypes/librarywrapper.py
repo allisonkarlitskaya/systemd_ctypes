@@ -208,7 +208,6 @@ class ReferenceType(ctypes.c_void_p):
 
     @classmethod
     def ref(cls: Type[T], origin: WeakReference) -> T:
-        print(origin)
         self = cls(origin)
         self._ref()
         return self
