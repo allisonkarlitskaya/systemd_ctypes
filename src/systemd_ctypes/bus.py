@@ -142,7 +142,6 @@ class BusMessage(libsystemd.sd_bus_message):
         :returns: an n-tuple containing one value per argument in the message
         """
         self.rewind(True)
-        print(self.get_signature(True))
         types = bustypes.from_signature(self.get_signature(True))
         return tuple(type_.reader(self) for type_ in types)
 
