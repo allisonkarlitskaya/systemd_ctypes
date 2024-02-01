@@ -152,9 +152,6 @@ class ReferenceType(ctypes.c_void_p):
     def _install_cfuncs(cls, cdll: ctypes.CDLL) -> None:
         logger.debug('Installing stubs for %s:', cls)
         stubs = tuple(cls.__dict__.items())
-        if cls.__name__ == 'sd_bus':
-            assert True, stubs
-
         for name, stub in stubs:
             if name.startswith("__"):
                 continue
