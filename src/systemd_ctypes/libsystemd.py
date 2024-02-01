@@ -18,7 +18,7 @@
 import ctypes
 import os
 import sys
-from typing import List, Optional, Tuple, Union
+from typing import ClassVar, List, Optional, Tuple, Union
 
 from .inotify import inotify_event
 from .librarywrapper import (
@@ -31,6 +31,25 @@ from .librarywrapper import (
     byref,
 )
 from .typing import Annotated
+
+
+class Trampoline(ReferenceType):
+    deferred: 'ClassVar[list[Callback] | None]' = None
+    trampoline: Callback
+    userdata: UserData = None
+
+    def cancel(self) -> None:
+        self._unref()
+        self.value = None
+
+    def __del__(self) -> None:
+        # This might be the currently-dispatching callback — make sure we don't
+        # destroy the trampoline before we return.  We drop the deferred list
+        # from the event loop when we're sure we're not doing any dispatches.
+        if Trampoline.deferred is not None:
+            Trampoline.deferred.append(self.trampoline)
+        if self.value is not None:
+            self._unref()
 
 
 class sd_bus_error(ctypes.Structure):
@@ -65,7 +84,7 @@ class sd_id128(ctypes.Structure):
     )
 
 
-class sd_event_source(ReferenceType):
+class sd_event_source(Trampoline):
     ...
 
 
@@ -105,7 +124,7 @@ class sd_event(ReferenceType):
         ...
 
 
-class sd_bus_slot(ReferenceType):
+class sd_bus_slot(Trampoline):
     ...
 
 

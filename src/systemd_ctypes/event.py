@@ -21,14 +21,11 @@ import sys
 from typing import Callable, ClassVar, Coroutine, List, Optional, Tuple
 
 from . import inotify, libsystemd
-from .librarywrapper import Callback, Reference, UserData, byref
+from .librarywrapper import Reference, UserData, byref
 
 
 class Event(libsystemd.sd_event):
     class Source(libsystemd.sd_event_source):
-        callback: Callback
-        userdata: UserData = None
-
         def cancel(self) -> None:
             self._unref()
             self.value = None
@@ -52,11 +49,11 @@ class Event(libsystemd.sd_event):
                 event = _event.contents
                 handler(inotify.Event(event.mask), event.cookie, event.name)
                 return 0
-            self.callback = libsystemd.sd_event_inotify_handler_t(callback)
+            self.trampoline = libsystemd.sd_event_inotify_handler_t(callback)
 
     def add_inotify(self, path: str, mask: inotify.Event, handler: InotifyHandler) -> InotifySource:
         source = Event.InotifySource(handler)
-        self._add_inotify(byref(source), path, mask, source.callback, source.userdata)
+        self._add_inotify(byref(source), path, mask, source.trampoline, source.userdata)
         return source
 
     def add_inotify_fd(self, fd: int, mask: inotify.Event, handler: InotifyHandler) -> InotifySource:
@@ -78,6 +75,14 @@ class Selector(selectors.DefaultSelector):
     def select(
             self, timeout: Optional[float] = None
     ) -> List[Tuple[selectors.SelectorKey, int]]:
+        # It's common to drop the last reference to a Source or Slot object on
+        # a dispatch of that same source/slot from the main loop.  If we happen
+        # to garbage collect before returning, the trampoline could be
+        # destroyed before we're done using it.  Provide a mechanism to defer
+        # the destruction of trampolines for as long as we might be
+        # dispatching.  This gets cleared again at the bottom, before return.
+        libsystemd.Trampoline.deferred = []
+
         while self.sd_event.prepare():
             self.sd_event.dispatch()
         ready = super().select(timeout)
@@ -87,6 +92,10 @@ class Selector(selectors.DefaultSelector):
             self.sd_event.dispatch()
             while self.sd_event.prepare():
                 self.sd_event.dispatch()
+
+        # We can be sure we're not dispatching callbacks anymore
+        libsystemd.Trampoline.deferred = None
+
         # This could return zero events with infinite timeout, but nobody seems to mind.
         return [(key, events) for (key, events) in ready if key != self.key]
 

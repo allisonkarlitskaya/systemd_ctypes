@@ -221,12 +221,7 @@ class Slot(libsystemd.sd_bus_slot):
     def __init__(self, callback: Callable[[BusMessage], bool]):
         def handler(message: WeakReference, _data: object, _err: object) -> int:
             return 1 if callback(BusMessage.ref(message)) else 0
-        self.callback = libsystemd.sd_bus_message_handler_t(handler)
-        self.userdata = None
-
-    def cancel(self) -> None:
-        self._unref()
-        self.value = None
+        self.trampoline = libsystemd.sd_bus_message_handler_t(handler)
 
 
 if typing.TYPE_CHECKING:
@@ -363,7 +358,7 @@ class Bus(libsystemd.sd_bus):
             timeout: Optional[int] = None
     ) -> BusMessage:
         pending = PendingCall()
-        self._call_async(byref(pending), message, pending.callback, pending.userdata, timeout or 0)
+        self._call_async(byref(pending), message, pending.trampoline, pending.userdata, timeout or 0)
         return await pending.future
 
     async def call_method_async(
@@ -384,12 +379,12 @@ class Bus(libsystemd.sd_bus):
 
     def add_match(self, rule: str, handler: Callable[[BusMessage], bool]) -> Slot:
         slot = Slot(handler)
-        self._add_match(byref(slot), rule, slot.callback, slot.userdata)
+        self._add_match(byref(slot), rule, slot.trampoline, slot.userdata)
         return slot
 
     def add_object(self, path: str, obj: 'BaseObject') -> Slot:
         slot = Slot(obj.message_received)
-        self._add_object(byref(slot), path, slot.callback, slot.userdata)
+        self._add_object(byref(slot), path, slot.trampoline, slot.userdata)
         obj.registered_on_bus(self, path)
         return slot
 
