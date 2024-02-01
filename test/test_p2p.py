@@ -179,13 +179,13 @@ class CommonTests:
 
     def test_method_throws(self):
         async def test():
-            with self.assertRaisesRegex(BusError, 'cockpit.Error.ZeroDivisionError: Divide by zero'):
+            with pytest.raises(BusError, match='cockpit.Error.ZeroDivisionError: Divide by zero'):
                 await self.client.call_method_async(None, '/test', 'cockpit.Test', 'Divide', 'ii', 1554, 0)
         run_async(test())
 
     def test_method_throws_oserror(self):
         async def test():
-            with self.assertRaisesRegex(BusError, 'org.freedesktop.DBus.Error.FileNotFound: .*notthere.*'):
+            with pytest.raises(BusError, match='org.freedesktop.DBus.Error.FileNotFound: .*notthere.*'):
                 await self.client.call_method_async(None, '/test', 'cockpit.Test', 'ReadFile', 's', 'notthere')
         run_async(test())
 
@@ -206,7 +206,7 @@ class CommonTests:
 
     def test_async_method_throws(self):
         async def test():
-            with self.assertRaisesRegex(BusError, 'cockpit.Error.ZeroDivisionError: Divide by zero'):
+            with pytest.raises(BusError, match='cockpit.Error.ZeroDivisionError: Divide by zero'):
                 await self.client.call_method_async(None, '/test', 'cockpit.Test', 'DivideSlowly', 'ii', 1554, 0)
         run_async(test())
 
@@ -249,8 +249,7 @@ class CommonTests:
             # Make sure that dropping the slot results in the object being un-exported
             self.test_object_slot = None
 
-            with self.assertRaisesRegex(
-                    BusError, "org.freedesktop.DBus.Error.UnknownObject: Unknown object '/test'."):
+            with pytest.raises(BusError, match="org.freedesktop.DBus.Error.UnknownObject: Unknown object '/test'."):
                 await self.client.call_method_async(None, '/test', 'cockpit.Test', 'Divide', 'ii', 1554, 37)
         run_async(test())
 

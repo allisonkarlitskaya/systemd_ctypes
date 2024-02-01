@@ -20,6 +20,7 @@ import tempfile
 import unittest
 
 import dbusmock  # type: ignore[import] # not typed
+import pytest
 
 import systemd_ctypes
 from systemd_ctypes import bus, introspection
@@ -141,13 +142,13 @@ class TestAPI(dbusmock.DBusTestCase):
     def test_int_error(self):
         # int overflow
         self.add_method('', 'Inc', 'i', 'i', 'ret = args[0] + 1')
-        with self.assertRaisesRegex(systemd_ctypes.BusError, 'OverflowError'):
+        with pytest.raises(systemd_ctypes.BusError, match='OverflowError'):
             self.bus_user.call_method(*TEST_ADDR, 'Inc', 'i', 0x7FFFFFFF)
 
         # uint underflow
         self.add_method('', 'Dec', 'u', 'u', 'ret = args[0] - 1')
-        with self.assertRaisesRegex(systemd_ctypes.BusError,
-                                    "OverflowError: can't convert negative value to unsigned int"):
+        with pytest.raises(systemd_ctypes.BusError,
+                           match="OverflowError: can't convert negative value to unsigned int"):
             self.bus_user.call_method(*TEST_ADDR, 'Dec', 'u', 0)
 
     def test_float(self):
@@ -213,35 +214,35 @@ class TestAPI(dbusmock.DBusTestCase):
         self.assertEqual(result, ['R8OkbnNlZsO8w59jaGVu'])
 
     def test_unknown_method_sync(self):
-        with self.assertRaisesRegex(systemd_ctypes.BusError, '.*org.freedesktop.DBus.Error.UnknownMethod:.*'
-                                    'Do is not a valid method of interface org.freedesktop.Test.Main'):
+        with pytest.raises(systemd_ctypes.BusError, match='.*org.freedesktop.DBus.Error.UnknownMethod:.*'
+                           'Do is not a valid method of interface org.freedesktop.Test.Main'):
             self.bus_user.call_method(*TEST_ADDR, 'Do')
 
     def test_unknown_method_async(self):
         message = self.bus_user.message_new_method_call(*TEST_ADDR, 'Do')
-        with self.assertRaisesRegex(systemd_ctypes.BusError, '.*org.freedesktop.DBus.Error.UnknownMethod:.*'
-                                    'Do is not a valid method of interface org.freedesktop.Test.Main'):
+        with pytest.raises(systemd_ctypes.BusError, match='.*org.freedesktop.DBus.Error.UnknownMethod:.*'
+                           'Do is not a valid method of interface org.freedesktop.Test.Main'):
             self.async_call(message).get_body()
 
     def test_call_signature_mismatch(self):
         self.add_method('', 'Inc', 'i', 'i', 'ret = args[0] + 1')
         # specified signature does not match server, but locally consistent args
-        with self.assertRaisesRegex(systemd_ctypes.BusError,
-                                    '(InvalidArgs|TypeError).*Fewer items.*signature.*arguments'):
+        with pytest.raises(systemd_ctypes.BusError,
+                           match='(InvalidArgs|TypeError).*Fewer items.*signature.*arguments'):
             self.bus_user.call_method(*TEST_ADDR, 'Inc', 'ii', 1, 2)
-        with self.assertRaisesRegex(systemd_ctypes.BusError, 'InvalidArgs|TypeError'):
+        with pytest.raises(systemd_ctypes.BusError, match='InvalidArgs|TypeError'):
             self.bus_user.call_method(*TEST_ADDR, 'Inc', 's', 'hello.*dbus.String.*integer')
 
         # specified signature does not match arguments
-        with self.assertRaisesRegex(AssertionError, r'call args \(1, 2\) have different length than signature.*'):
+        with pytest.raises(AssertionError, match=r'call args \(1, 2\) have different length than signature.*'):
             self.bus_user.call_method(*TEST_ADDR, 'Inc', 'i', 1, 2)
-        with self.assertRaisesRegex(TypeError, r'.*str.* as.* integer|int.*str'):
+        with pytest.raises(TypeError, match=r'.*str.* as.* integer|int.*str'):
             self.bus_user.call_method(*TEST_ADDR, 'Inc', 'i', 'hello')
 
     def test_custom_error(self):
         self.add_method('', 'Boom', '', '',
                         'raise dbus.exceptions.DBusException("no good", name="com.example.Error.NoGood")')
-        with self.assertRaisesRegex(systemd_ctypes.BusError, 'no good'):
+        with pytest.raises(systemd_ctypes.BusError, match='no good'):
             self.bus_user.call_method(*TEST_ADDR, 'Boom')
 
     def test_introspect(self):
@@ -283,17 +284,20 @@ class TestAPI(dbusmock.DBusTestCase):
 
     def test_request_name_errors(self):
         # name already exists
-        self.assertRaises(FileExistsError, self.bus_user.request_name, TEST_ADDR[0], bus.Bus.NameFlags.DEFAULT)
+        with pytest.raises(FileExistsError):
+            self.bus_user.request_name(TEST_ADDR[0], bus.Bus.NameFlags.DEFAULT)
 
         # invalid name
-        self.assertRaisesRegex(OSError, '.*Invalid argument',
-                               self.bus_user.request_name, '', bus.Bus.NameFlags.DEFAULT)
+        with pytest.raises(OSError, match='.*Invalid argument'):
+            self.bus_user.request_name('', bus.Bus.NameFlags.DEFAULT)
 
         # invalid flag
-        self.assertRaisesRegex(OSError, '.*Invalid argument', self.bus_user.request_name, TEST_ADDR[0], 0xFF)
+        with pytest.raises(OSError, match='.*Invalid argument'):
+            self.bus_user.request_name(TEST_ADDR[0], 0xFF)
 
         # name not taken
-        self.assertRaises(ProcessLookupError, self.bus_user.release_name, 'com.example.NotThis')
+        with pytest.raises(ProcessLookupError):
+            self.bus_user.release_name('com.example.NotThis')
 
 
 if __name__ == '__main__':
