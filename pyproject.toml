@@ -9,6 +9,7 @@ readme = "README.md"
 license = {file = "COPYING"}
 classifiers = ["License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"]
 dynamic = ["version", "description"]
+dependencies = ["defusedxml"]
 
 [project.urls]
 Home = "https://github.com/allisonkarlitskaya/systemd_ctypes/"
@@ -94,6 +95,8 @@ package = wheel
 wheel_build_env = venv-pkg
 skip_install = mypy,pycodestyle,ruff: True
 deps =
+  pytest,mypy: defusedxml
+  mypy: types-defusedxml
   pytest,mypy: pytest-cov
   pytest,mypy: python-dbusmock
   mypy: mypy

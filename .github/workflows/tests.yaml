@@ -36,6 +36,7 @@ jobs:
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                   flit \
                   libsystemd0 \
+                  python3-defusedxml \
                   python3-dbusmock \
                   python3-pytest \
                   python3-pytest-cov \
@@ -48,6 +49,7 @@ jobs:
                   systemd-libs
               pip3 install \
                   flit \
+                  defusedxml \
                   pytest \
                   pytest-cov \
                   python-dbusmock \
@@ -56,6 +58,7 @@ jobs:
               dnf install -y \
                   python3-dbusmock \
                   python3-flit \
+                  python3-defusedxml \
                   python3-pytest \
                   python3-pytest-cov \
                   systemd-libs \
@@ -92,6 +95,7 @@ jobs:
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                 flit \
                 libsystemd0 \
+                python3-defusedxml \
                 python3-dbusmock \
                 python3-pytest-cov \
                 tox

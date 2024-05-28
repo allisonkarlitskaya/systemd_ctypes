@@ -17,6 +17,8 @@
 
 import xml.etree.ElementTree as ET
 
+import defusedxml.ElementTree as DET
+
 
 def parse_method(method):
     return {
@@ -45,7 +47,7 @@ def parse_interface(interface):
 
 
 def parse_xml(xml):
-    et = ET.fromstring(xml)
+    et = DET.fromstring(xml)
     return {tag.attrib['name']: parse_interface(tag) for tag in et.findall('interface')}
 
 
