@@ -18,8 +18,8 @@ jobs:
           - docker.io/ubuntu:rolling
           - docker.io/ubuntu:latest
           - registry.fedoraproject.org/fedora:rawhide
-          - quay.io/centos/centos:stream8
           - quay.io/centos/centos:stream9
+          - quay.io/centos/centos:stream10-development
 
     container:
       image: ${{ matrix.container }}
