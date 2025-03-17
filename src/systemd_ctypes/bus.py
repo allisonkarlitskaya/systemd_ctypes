@@ -18,6 +18,7 @@
 import asyncio
 import enum
 import logging
+import sys
 import typing
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
@@ -26,6 +27,7 @@ from .librarywrapper import WeakReference, byref
 
 logger = logging.getLogger(__name__)
 
+IS_LITTLE_ENDIAN_MACHINE = sys.byteorder == 'little'
 
 class BusError(Exception):
     """An exception corresponding to a D-Bus error message
@@ -144,6 +146,9 @@ class BusMessage(libsystemd.sd_bus_message):
         self.rewind(True)
         types = bustypes.from_signature(self.get_signature(True))
         return tuple(type_.reader(self) for type_ in types)
+
+    def is_little_endian(self) -> bool:
+        return libsystemd.is_message_little_endian(self)
 
     def send(self) -> bool:  # Literal[True]
         """Sends a message on the bus that it was created for.

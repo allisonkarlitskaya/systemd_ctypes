@@ -33,6 +33,18 @@ from .librarywrapper import (
 from .typing import Annotated
 
 
+def is_message_little_endian(message: 'sd_bus_message') -> bool:
+    endian = ctypes.c_uint8()
+    try:
+        message.get_endian(byref(endian))
+    except NotImplementedError:
+        # in cases where sd_bus_message_get_endian is not implemented
+        # fall back to the endianness that the machine has
+        return IS_LITTLE_ENDIAN_MACHINE
+
+    # 'B' would be for big endian
+    return chr(endian.value) == 'l'
+
 class Trampoline(ReferenceType):
     deferred: 'ClassVar[list[Callback] | None]' = None
     trampoline: Callback
@@ -172,6 +184,9 @@ class sd_bus_message(ReferenceType):
         ...
 
     def _get_bus(self: 'sd_bus_message') -> WeakReference:
+        raise NotImplementedError
+
+    def get_endian(self: 'sd_bus_message', endian: Reference[ctypes.c_uint8]) -> Union[None, Errno]:
         raise NotImplementedError
 
     def get_destination(self: 'sd_bus_message') -> str:

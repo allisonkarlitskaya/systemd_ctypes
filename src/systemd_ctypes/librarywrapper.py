@@ -173,7 +173,17 @@ class ReferenceType(ctypes.c_void_p):
         signature = inspect.signature(stub)
         stub_globals = sys.modules.get(cls.__module__).__dict__
 
-        func = cdll[f'{cls.__name__}_{name.lstrip("_")}']
+        cdll_name = f'{cls.__name__}_{name.lstrip("_")}'
+        try:
+            func = cdll[cdll_name]
+        except AttributeError as error:
+            # sd_bus_message_get_endian is not implemented in all versions of
+            # libsystemd so we need to ignore it and deal with it in python
+            if cdll_name == 'sd_bus_message_get_endian':
+                return
+            else:
+                raise error
+
         func.argtypes = tuple(
             map_type(parameter.annotation, stub_globals)
             for parameter in signature.parameters.values()
