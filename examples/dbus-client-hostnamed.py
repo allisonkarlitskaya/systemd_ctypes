@@ -27,7 +27,6 @@ def property_changed(message):
 
 async def main():
     system = Bus.default_system()
-    system.attach_event(None, 0)
 
     xml, = system.call_method('org.freedesktop.hostname1',
                               '/org/freedesktop/hostname1',
