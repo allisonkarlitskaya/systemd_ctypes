@@ -99,6 +99,16 @@ class sd_event(ReferenceType):
     ) -> Union[None, Errno]:
         ...
 
+    def _add_inotify_fd(
+        self: 'sd_event',
+        source: Reference[sd_event_source],
+        fd: int,
+        event: int,
+        callback: Callback,
+        user_data: UserData,
+    ) -> Union[None, Errno]:
+        ...
+
     def dispatch(self: 'sd_event') -> Union[None, Errno]:
         ...
 

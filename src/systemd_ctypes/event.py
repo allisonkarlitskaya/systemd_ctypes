@@ -57,8 +57,9 @@ class Event(libsystemd.sd_event):
         return source
 
     def add_inotify_fd(self, fd: int, mask: inotify.Event, handler: InotifyHandler) -> InotifySource:
-        # HACK: sd_event_add_inotify_fd() got added in 250, which is too new.  Fake it.
-        return self.add_inotify(f'/proc/self/fd/{fd}', mask, handler)
+        source = Event.InotifySource(handler)
+        self._add_inotify_fd(byref(source), fd, mask, source.trampoline, source.userdata)
+        return source
 
 
 # This is all a bit more awkward than it should have to be: systemd's event
