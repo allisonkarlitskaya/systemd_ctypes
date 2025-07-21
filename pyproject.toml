@@ -101,7 +101,7 @@ deps =
   ruff: ruff
 commands =
   pytest: python3 -m pytest -opythonpath= {posargs:--cov}
-  ruff: python3 -m ruff {posargs:src test}
+  ruff: python3 -m ruff check {posargs:src test}
   mypy: python3 -m mypy {posargs:src test}
   pycodestyle: python3 -m pycodestyle --max-line-length=118 {posargs:src test}
 """
