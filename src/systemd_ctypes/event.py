@@ -100,14 +100,18 @@ class Selector(selectors.DefaultSelector):
         return [(key, events) for (key, events) in ready if key != self.key]
 
 
+def selector_event_loop_factory() -> asyncio.AbstractEventLoop:
+    """Factory function to create an asyncio event loop using Selector."""
+    return asyncio.SelectorEventLoop(Selector())
+
+
+# deprecated in Python 3.12
 class EventLoopPolicy(asyncio.DefaultEventLoopPolicy):
     def new_event_loop(self) -> asyncio.AbstractEventLoop:
-        return asyncio.SelectorEventLoop(Selector())
+        return selector_event_loop_factory()
 
 
 def run_async(main: Coroutine[None, None, None], debug: Optional[bool] = None) -> None:
-    asyncio.set_event_loop_policy(EventLoopPolicy())
-
     polyfill = sys.version_info < (3, 7, 0) and not hasattr(asyncio, 'run')
     if polyfill:
         # Polyfills for Python 3.6:
@@ -132,7 +136,11 @@ def run_async(main: Coroutine[None, None, None], debug: Optional[bool] = None) -
 
         asyncio._systemd_ctypes_polyfills = True  # type: ignore[attr-defined]
 
-    asyncio.run(main, debug=debug)
+    if sys.version_info >= (3, 12, 0):
+        asyncio.run(main, debug=debug, loop_factory=selector_event_loop_factory)
+    else:
+        asyncio.set_event_loop_policy(EventLoopPolicy())
+        asyncio.run(main, debug=debug)
 
     if polyfill:
         del asyncio.create_task, asyncio.get_running_loop, asyncio.run
