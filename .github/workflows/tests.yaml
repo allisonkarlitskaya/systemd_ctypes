@@ -101,7 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {}
     container:
-      image: registry.fedoraproject.org/fedora:38
+      image: registry.fedoraproject.org/fedora:42
     timeout-minutes: 10
     steps:
       - name: Install system dependencies
@@ -111,7 +111,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Run unit tests
-        run: tox -e py36-pytest,py37-pytest,py38-pytest,py39-pytest,py310-pytest,py311-pytest,py312-pytest
+        run: tox -e py36-pytest,py39-pytest,py310-pytest,py311-pytest,py312-pytest
 
   lint:
     runs-on: ubuntu-latest
