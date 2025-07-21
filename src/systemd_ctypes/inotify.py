@@ -17,7 +17,16 @@
 
 import ctypes
 from enum import IntFlag, auto
-from typing import Optional
+from functools import lru_cache
+from typing import Optional, Type
+
+
+@lru_cache(maxsize=1024)
+def _get_event_class_for_len(base_fields: tuple, length: int) -> Type[ctypes.Structure]:
+    """Create and cache ctypes.Structure classes for different event name lengths"""
+    class event_with_name(ctypes.Structure):
+        _fields_ = (*base_fields, ('name', ctypes.c_char * length))
+    return event_with_name
 
 
 class inotify_event(ctypes.Structure):
@@ -33,10 +42,9 @@ class inotify_event(ctypes.Structure):
         if self.len == 0:
             return None
 
-        class event_with_name(ctypes.Structure):
-            _fields_ = (*inotify_event._fields_, ('name', ctypes.c_char * self.len))
-
-        name = ctypes.cast(ctypes.addressof(self), ctypes.POINTER(event_with_name)).contents.name
+        # don't instantiate a new class for every event (memleak)
+        event_class = _get_event_class_for_len(self._fields_, self.len)
+        name = ctypes.cast(ctypes.addressof(self), ctypes.POINTER(event_class)).contents.name
         assert isinstance(name, bytes)
         return name
 
