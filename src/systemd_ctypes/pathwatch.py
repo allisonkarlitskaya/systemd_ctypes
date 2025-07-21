@@ -102,7 +102,7 @@ class Handle(int):
     def __enter__(self) -> 'Handle':
         return self
 
-    def __exit__(self, _type: type, _value: object, _traceback: object) -> None:
+    def __exit__(self, *_args: object) -> None:
         self.close()
 
     @classmethod
