@@ -17,16 +17,7 @@
 
 import ctypes
 from enum import IntFlag, auto
-from functools import lru_cache
-from typing import Optional, Type
-
-
-@lru_cache(maxsize=1024)
-def _get_event_class_for_len(base_fields: tuple, length: int) -> Type[ctypes.Structure]:
-    """Create and cache ctypes.Structure classes for different event name lengths"""
-    class event_with_name(ctypes.Structure):
-        _fields_ = (*base_fields, ('name', ctypes.c_char * length))
-    return event_with_name
+from typing import Optional
 
 
 class inotify_event(ctypes.Structure):
@@ -42,11 +33,11 @@ class inotify_event(ctypes.Structure):
         if self.len == 0:
             return None
 
-        # don't instantiate a new class for every event (memleak)
-        event_class = _get_event_class_for_len(self._fields_, self.len)
-        name = ctypes.cast(ctypes.addressof(self), ctypes.POINTER(event_class)).contents.name
-        assert isinstance(name, bytes)
-        return name
+        # inotify(7) says:
+        # This filename is null-terminated, and may include further null bytes
+        # ('\0') to align subsequent reads to a suitable address boundary.
+        addr = ctypes.addressof(self) + ctypes.sizeof(self)
+        return ctypes.string_at(addr, self.len).rstrip(b'\0')
 
 
 class Event(IntFlag):
