@@ -20,6 +20,7 @@ import errno
 import os
 import tempfile
 import unittest
+from typing import Tuple
 from unittest.mock import MagicMock
 
 import systemd_ctypes
@@ -27,6 +28,25 @@ from systemd_ctypes.inotify import Event
 
 with open("/etc/os-release") as f:
     os_release = f.read()
+
+
+def get_memory_usage() -> Tuple[int, int]:
+    """Get current process RSS and VSZ memory usage (in KiB)"""
+
+    rss_kb = None
+    vsz_kb = None
+
+    with open('/proc/self/status') as f:
+        for line in f:
+            if line.startswith('VmRSS:'):
+                rss_kb = int(line.split()[1])
+            elif line.startswith('VmSize:'):
+                vsz_kb = int(line.split()[1])
+
+    assert rss_kb is not None
+    assert vsz_kb is not None
+
+    return rss_kb, vsz_kb
 
 
 class TestPathWatch(unittest.TestCase):
@@ -196,6 +216,56 @@ class TestPathWatch(unittest.TestCase):
         listener.reset_mock()
         wait_event()
         listener.do_inotify_event.assert_called_once_with(Event.CLOSE_WRITE, 0, b'file.txt')
+
+    def testMemoryLeak(self):
+        """Test for memory leaks when watching a directory with many file changes"""
+
+        # Use a lightweight event counter instead of MagicMock to avoid call history overhead
+        class EventCounter(systemd_ctypes.pathwatch.Listener):
+            def __init__(self):
+                self.events = 0
+                self.identity_changes = 0
+
+            def do_inotify_event(self, mask, cookie, name):
+                self.events += 1
+
+            def do_identity_changed(self, fd, errno):
+                self.identity_changes += 1
+
+        listener = EventCounter()
+        watch = systemd_ctypes.PathWatch(self.base.name, listener)
+        self.addCleanup(watch.close)
+
+        def wait_event(expected_events):
+            nonlocal listener
+            self.async_wait_cond(lambda: listener.events >= expected_events)
+
+        # wait for initial do_identity_changed event
+        self.async_wait_cond(lambda: listener.identity_changes >= 1)
+
+        # perform many file operations to trigger potential memory leaks, measure memory usage
+        initial_rss, initial_vsz = get_memory_usage()
+        num_iterations = 500
+
+        for i in range(num_iterations):
+            # Create and write unique files - each generates CREATE and CLOSE_WRITE events
+            test_file = os.path.join(self.base.name, f'test_file_{i}.txt')
+            with open(test_file, 'w') as f:
+                f.write('x')
+
+        # 3 events per iteration: CREATE, MODIFY, CLOSE_WRITE
+        wait_event(num_iterations * 3)
+
+        final_rss, final_vsz = get_memory_usage()
+        growth_rss = final_rss - initial_rss
+        growth_vsz = final_vsz - initial_vsz
+
+        print(f"\nMemory usage delta: RSS={growth_rss} KiB, VSZ={growth_vsz} KiB")
+
+        # tolerate a few KiB for some wiggle room; older Pythons have no measurable increase,
+        # 3.14 perhaps uses some JIT?; original leak was 12000 KiB
+        self.assertLess(growth_rss, 200)
+        self.assertLess(growth_vsz, 200)
 
 
 if __name__ == '__main__':
