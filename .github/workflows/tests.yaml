@@ -123,7 +123,7 @@ jobs:
           python-version: 3.12
 
       - name: Install system dependencies
-        run: sudo apt install libdbus-1-dev
+        run: sudo apt install libdbus-1-dev libglib2.0-dev
 
       - name: Install tox
         run: sudo apt-get install -y tox
