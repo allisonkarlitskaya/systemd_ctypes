@@ -114,6 +114,11 @@ class EventLoopPolicy(asyncio.DefaultEventLoopPolicy):
 
 def run_async(main: Coroutine[None, None, None], debug: Optional[bool] = None) -> None:
     polyfill = sys.version_info < (3, 7, 0) and not hasattr(asyncio, 'run')
+    loop_factory = sys.version_info >= (3, 12, 0)
+
+    if not loop_factory:
+        asyncio.set_event_loop_policy(EventLoopPolicy())
+
     if polyfill:
         # Polyfills for Python 3.6:
         loop = asyncio.get_event_loop()
@@ -137,10 +142,9 @@ def run_async(main: Coroutine[None, None, None], debug: Optional[bool] = None) -
 
         asyncio._systemd_ctypes_polyfills = True  # type: ignore[attr-defined]
 
-    if sys.version_info >= (3, 12, 0):
+    if loop_factory:
         asyncio.run(main, debug=debug, loop_factory=selector_event_loop_factory)
     else:
-        asyncio.set_event_loop_policy(EventLoopPolicy())
         asyncio.run(main, debug=debug)
 
     if polyfill:
