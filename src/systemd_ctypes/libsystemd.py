@@ -118,6 +118,9 @@ class sd_event(ReferenceType):
     def get_state(self: 'sd_event') -> Union[int, Errno]:
         raise NotImplementedError
 
+    def run(self: 'sd_event', timeout: int) -> Union[int, Errno]:
+        raise NotImplementedError
+
     def loop(self: 'sd_event') -> Union[None, Errno]:
         ...
 

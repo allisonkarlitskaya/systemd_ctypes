@@ -26,15 +26,6 @@ from .librarywrapper import Reference, UserData, byref
 
 logger = logging.getLogger(__name__)
 
-# sd-event state constants from sd-event.h
-SD_EVENT_INITIAL = 0
-SD_EVENT_ARMED = 1
-SD_EVENT_PENDING = 2
-SD_EVENT_RUNNING = 3
-SD_EVENT_EXITING = 4
-SD_EVENT_FINISHED = 5
-SD_EVENT_PREPARING = 6
-
 MAX_UINT64 = 1 << 64 - 1
 
 
@@ -101,37 +92,11 @@ class Selector(selectors.DefaultSelector):
         # dispatching.  This gets cleared again at the bottom, before return.
         libsystemd.Trampoline.deferred = []
 
-        # see state machine at
-        # https://www.freedesktop.org/software/systemd/man/latest/sd_event_prepare.html
-        state = self.sd_event.get_state()
-        logger.debug('sd_event.get_state() returned %r; timeout %r', state, timeout)
-
-        if state == SD_EVENT_INITIAL:
-            ret = self.sd_event.prepare()
-            logger.debug('sd_event.prepare() returned %r', ret)
-            # > 0: events are ready, process with dispatch(); 0: no events, → ARMED
-            # Events may be pending now, but don't dispatch here - let it happen
-            # in the next iteration when state will be PENDING
-        elif state == SD_EVENT_ARMED:
-            ret = self.sd_event.wait(MAX_UINT64 if timeout is None else int(timeout * 1000000))
-            logger.debug('sd_event.wait() returned %r', state)
-            # short-circuit infinite timeout if an event is ready
-            if ret is not None and ret > 0:
-                timeout = 0
-        elif state == SD_EVENT_PENDING:
-            ret = self.sd_event.dispatch()
-            logger.debug('sd_event.dispatch() returned %r', ret)
-            # Continue to check if more events are pending
-            if ret is not None and ret > 0:
-                timeout = 0
-        elif state in [SD_EVENT_PREPARING, SD_EVENT_RUNNING, SD_EVENT_EXITING]:
-            # An event source preparation handler is executing; this should be brief
-            pass
-        elif state == SD_EVENT_FINISHED:
-            # Should Not Happen™. But what can we do..
-            logger.warning('sd_event loop is unexpectedly finished')
-        else:
-            raise RuntimeError('Unexpected sd_event state: %r' % state)
+        ret = self.sd_event.run(MAX_UINT64 if timeout is None else int(timeout * 1000000))
+        logger.debug('sd_event.run() returned %r; timeout %r', ret, timeout)
+        # if events were processed, don't wait in select again
+        if ret is not None and ret > 0:
+            timeout = 0
 
         ready = super().select(timeout)
 
