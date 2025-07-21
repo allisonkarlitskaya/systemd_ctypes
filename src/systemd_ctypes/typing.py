@@ -49,10 +49,10 @@ else:
 
 
 __all__ = (
+    'TYPE_CHECKING',
     'Annotated',
     'ForwardRef',
     'TypeGuard',
     'get_args',
     'get_origin',
-    'TYPE_CHECKING',
 )

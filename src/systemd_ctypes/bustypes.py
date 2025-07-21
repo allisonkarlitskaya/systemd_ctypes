@@ -123,7 +123,7 @@ def call_with_kwargs(func: Callable[..., T], kwargs: Dict[str, Any]) -> T:
 class Type:
     _cache: ClassVar[Dict[Tuple[type, Tuple[object, ...]], 'Type']] = {}
 
-    __slots__ = 'typestring', 'bytes_typestring', 'writer', 'reader'
+    __slots__ = 'bytes_typestring', 'reader', 'typestring', 'writer'
     typestring: str
     bytes_typestring: bytes
     reader: Callable[[libsystemd.sd_bus_message], object]
