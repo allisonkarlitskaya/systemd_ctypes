@@ -18,7 +18,7 @@
 import ctypes
 import os
 import sys
-from typing import ClassVar, List, Optional, Tuple, Union
+from typing import ClassVar, Optional, Tuple, Union
 
 from .inotify import inotify_event
 from .librarywrapper import (
@@ -77,7 +77,7 @@ class sd_bus_error(ctypes.Structure):
 class sd_id128(ctypes.Structure):
     # HACK: Pass-by-value of array-containing-structs is broken on Python
     # 3.6. See https://bugs.python.org/issue22273
-    _fields_: List[Tuple[str, type]] = (
+    _fields_ = (
         [("bytes", ctypes.c_uint8 * 16)]
         if sys.version_info >= (3, 7, 0)
         else [("one", ctypes.c_uint64), ("two", ctypes.c_uint64)]
