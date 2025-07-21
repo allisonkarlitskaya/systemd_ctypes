@@ -18,6 +18,7 @@ jobs:
           - docker.io/ubuntu:rolling
           - docker.io/ubuntu:latest
           - registry.fedoraproject.org/fedora:rawhide
+          - quay.io/centos/centos:stream8
           - quay.io/centos/centos:stream9
           - quay.io/centos/centos:stream10-development
 
@@ -41,6 +42,10 @@ jobs:
                   python3-pytest-cov \
                   tox
           elif grep -q platform:el /etc/os-release; then
+              if grep -q platform:el8 /etc/os-release; then
+                  sed -i -E '/^mirror/d; s@#(baseurl=http://)mirror@\1vault@' /etc/yum.repos.d/*.repo
+              fi
+
               dnf install -y \
                   python3-pip \
                   python3-dbus \
