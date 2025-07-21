@@ -117,10 +117,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {}
     steps:
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v4
         with:
-          python-version: 3.11
+          python-version: 3.12
 
       - name: Install system dependencies
         run: sudo apt install libdbus-1-dev
@@ -132,4 +132,4 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Run code checks
-        run: tox -e py311-mypy,py311-pycodestyle,py311-ruff
+        run: tox -e py312-mypy,py312-pycodestyle,py312-ruff
