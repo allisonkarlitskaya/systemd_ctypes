@@ -22,7 +22,7 @@ log_cli = true
 
 [tool.ruff]
 line-length = 118
-select = [
+lint.select = [
     "A",       # flake8-builtins
     "B",       # flake8-bugbear
     "C4",      # flake8-comprehensions
@@ -45,18 +45,18 @@ select = [
     "W",       # warnings (mostly whitespace)
     "YTT",     # flake8-2020
 ]
-ignore = [
+lint.ignore = [
     "A003",    # Class attribute is shadowing a python builtin
     "B905",    # `zip()` without an explicit `strict=` parameter
     "PT009",   # Use a regular `assert` instead of unittest-style `assertEqual`
     "PT017",   # Found assertion on exception `exc` in `except` block, use `pytest.raises()` instead
 ]
 
-[tool.ruff.flake8-pytest-style]
+[tool.ruff.lint.flake8-pytest-style]
 fixture-parentheses = false
 mark-parentheses = false
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["systemd_ctypes"]
 
 [tool.coverage.paths]
