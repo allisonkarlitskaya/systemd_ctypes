@@ -105,6 +105,7 @@ class BusMessage(libsystemd.sd_bus_message):
             self._new_method_errorf(byref(reply), error.name, "%s", error.message)
         else:
             assert isinstance(error, OSError)
+            assert isinstance(error.errno, int), 'OSError must have an integer errno'
             self._new_method_errnof(byref(reply), error.errno, "%s", str(error))
         return reply
 
