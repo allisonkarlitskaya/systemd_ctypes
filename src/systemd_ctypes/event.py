@@ -16,6 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import asyncio
+import logging
 import selectors
 import sys
 from typing import Callable, ClassVar, Coroutine, List, Optional, Tuple
@@ -23,12 +24,17 @@ from typing import Callable, ClassVar, Coroutine, List, Optional, Tuple
 from . import inotify, libsystemd
 from .librarywrapper import Reference, UserData, byref
 
+logger = logging.getLogger(__name__)
+
+MAX_UINT64 = 1 << 64 - 1
+
 
 class Event(libsystemd.sd_event):
     class Source(libsystemd.sd_event_source):
         def cancel(self) -> None:
             self._unref()
             self.value = None
+            logger.debug('Canceled event source %s (value=%s)', self, self.value)
 
     _default_instance: ClassVar[Optional['Event']] = None
 
@@ -54,11 +60,13 @@ class Event(libsystemd.sd_event):
     def add_inotify(self, path: str, mask: inotify.Event, handler: InotifyHandler) -> InotifySource:
         source = Event.InotifySource(handler)
         self._add_inotify(byref(source), path, mask, source.trampoline, source.userdata)
+        logger.debug('Added inotify source for path %s with mask %s: %s', path, mask, source)
         return source
 
     def add_inotify_fd(self, fd: int, mask: inotify.Event, handler: InotifyHandler) -> InotifySource:
         source = Event.InotifySource(handler)
         self._add_inotify_fd(byref(source), fd, mask, source.trampoline, source.userdata)
+        logger.debug('Added inotify source for fd %i with mask %s: %s', fd, mask, source)
         return source
 
 
@@ -84,15 +92,13 @@ class Selector(selectors.DefaultSelector):
         # dispatching.  This gets cleared again at the bottom, before return.
         libsystemd.Trampoline.deferred = []
 
-        while self.sd_event.prepare():
-            self.sd_event.dispatch()
+        ret = self.sd_event.run(MAX_UINT64 if timeout is None else int(timeout * 1000000))
+        logger.debug('sd_event.run() returned %r; timeout %r', ret, timeout)
+        # if events were processed, don't wait in select again
+        if ret is not None and ret > 0:
+            timeout = 0
+
         ready = super().select(timeout)
-        # workaround https://github.com/systemd/systemd/issues/23826
-        # keep calling wait() until there's nothing left
-        while self.sd_event.wait(0):
-            self.sd_event.dispatch()
-            while self.sd_event.prepare():
-                self.sd_event.dispatch()
 
         # We can be sure we're not dispatching callbacks anymore
         libsystemd.Trampoline.deferred = None
