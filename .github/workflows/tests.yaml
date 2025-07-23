@@ -14,9 +14,10 @@ jobs:
         container:
           - docker.io/debian:stable
           - docker.io/debian:unstable
-          - docker.io/ubuntu:devel
-          - docker.io/ubuntu:rolling
+          - docker.io/ubuntu:22.04
           - docker.io/ubuntu:latest
+          - docker.io/ubuntu:rolling
+          - docker.io/ubuntu:devel
           - registry.fedoraproject.org/fedora:rawhide
           - quay.io/centos/centos:stream8
           - quay.io/centos/centos:stream9
