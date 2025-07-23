@@ -109,6 +109,17 @@ class sd_event(ReferenceType):
     ) -> Union[None, Errno]:
         ...
 
+    # HACK: sd_event_add_inotify_fd() got added in 250, which is too new.  Fake it.
+    def __fallback_add_inotify_fd(
+        self: 'sd_event',
+        source: Reference[sd_event_source],
+        fd: int,
+        event: int,
+        callback: Callback,
+        user_data: UserData,
+    ) -> Union[None, Errno]:
+        return self._add_inotify(source, f'/proc/self/fd/{fd}', event, callback, user_data)
+
     def dispatch(self: 'sd_event') -> Union[None, Errno]:
         ...
 

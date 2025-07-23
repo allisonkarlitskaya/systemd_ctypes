@@ -153,7 +153,8 @@ class ReferenceType(ctypes.c_void_p):
         logger.debug('Installing stubs for %s:', cls)
         stubs = tuple(cls.__dict__.items())
         for name, stub in stubs:
-            if name.startswith("__"):
+            # Skip private members and name-mangled fallback methods
+            if name.startswith(("__", f"_{cls.__name__}__fallback")):
                 continue
             cls._wrap(cdll, stub)
 
@@ -173,7 +174,18 @@ class ReferenceType(ctypes.c_void_p):
         signature = inspect.signature(stub)
         stub_globals = sys.modules.get(cls.__module__).__dict__
 
-        func = cdll[f'{cls.__name__}_{name.lstrip("_")}']
+        c_func_name = f'{cls.__name__}_{name.lstrip("_")}'
+
+        try:
+            func = cdll[c_func_name]
+        except AttributeError as e:
+            # check if there is a fallback method
+            try:
+                func = getattr(cls, f'_{cls.__name__}__fallback{name}')
+            except AttributeError:
+                raise AttributeError(
+                    f'{c_func_name} does not exist, no fallback available') from e
+
         func.argtypes = tuple(
             map_type(parameter.annotation, stub_globals)
             for parameter in signature.parameters.values()
