@@ -214,13 +214,13 @@ class TestAPI(dbusmock.DBusTestCase):
         self.assertEqual(result, ['R8OkbnNlZsO8w59jaGVu'])
 
     def test_unknown_method_sync(self):
-        with pytest.raises(systemd_ctypes.BusError, match='.*org.freedesktop.DBus.Error.UnknownMethod:.*'
+        with pytest.raises(systemd_ctypes.BusError, match=r'.*org.freedesktop.DBus.Error.UnknownMethod:.*'
                            'Do is not a valid method of interface org.freedesktop.Test.Main'):
             self.bus_user.call_method(*TEST_ADDR, 'Do')
 
     def test_unknown_method_async(self):
         message = self.bus_user.message_new_method_call(*TEST_ADDR, 'Do')
-        with pytest.raises(systemd_ctypes.BusError, match='.*org.freedesktop.DBus.Error.UnknownMethod:.*'
+        with pytest.raises(systemd_ctypes.BusError, match=r'.*org.freedesktop.DBus.Error.UnknownMethod:.*'
                            'Do is not a valid method of interface org.freedesktop.Test.Main'):
             self.async_call(message).get_body()
 
@@ -228,9 +228,9 @@ class TestAPI(dbusmock.DBusTestCase):
         self.add_method('', 'Inc', 'i', 'i', 'ret = args[0] + 1')
         # specified signature does not match server, but locally consistent args
         with pytest.raises(systemd_ctypes.BusError,
-                           match='(InvalidArgs|TypeError).*Fewer items.*signature.*arguments'):
+                           match=r'(InvalidArgs|TypeError).*Fewer items.*signature.*arguments'):
             self.bus_user.call_method(*TEST_ADDR, 'Inc', 'ii', 1, 2)
-        with pytest.raises(systemd_ctypes.BusError, match='InvalidArgs|TypeError'):
+        with pytest.raises(systemd_ctypes.BusError, match=r'InvalidArgs|TypeError'):
             self.bus_user.call_method(*TEST_ADDR, 'Inc', 's', 'hello.*dbus.String.*integer')
 
         # specified signature does not match arguments
@@ -288,11 +288,11 @@ class TestAPI(dbusmock.DBusTestCase):
             self.bus_user.request_name(TEST_ADDR[0], bus.Bus.NameFlags.DEFAULT)
 
         # invalid name
-        with pytest.raises(OSError, match='.*Invalid argument'):
+        with pytest.raises(OSError, match=r'.*Invalid argument'):
             self.bus_user.request_name('', bus.Bus.NameFlags.DEFAULT)
 
         # invalid flag
-        with pytest.raises(OSError, match='.*Invalid argument'):
+        with pytest.raises(OSError, match=r'.*Invalid argument'):
             self.bus_user.request_name(TEST_ADDR[0], 0xFF)
 
         # name not taken
