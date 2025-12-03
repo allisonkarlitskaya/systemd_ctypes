@@ -121,11 +121,11 @@ def test_bad_mapping(message: BusMessage) -> None:
     writer = bustypes.from_annotation(typing.Dict[str, str]).writer
     writer(message, {})
     writer(message, {'a': 'b', 'c': 'd'})
-    with pytest.raises(AttributeError, match="'set'.*'items'"):
+    with pytest.raises(AttributeError, match=r"'set'.*'items'"):
         writer(message, {'a', 'b', 'c'})  # no '.items()'
-    with pytest.raises(TypeError, match="'str'.*'int'"):
+    with pytest.raises(TypeError, match=r"'str'.*'int'"):
         writer(message, {1: 'a'})  # wrong key type
-    with pytest.raises(TypeError, match="'str'.*'int'"):
+    with pytest.raises(TypeError, match=r"'str'.*'int'"):
         writer(message, {'a': 1})  # wrong value type
 
     class weird:
