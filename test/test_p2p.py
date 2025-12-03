@@ -227,8 +227,8 @@ class CommonTests:
             # Without this initial pointless method call, the signal
             # below will not be received.
             #
-            reply, = await self.client.call_method_async(None, '/test', 'org.freedesktop.DBus.Properties', 'Get',
-                                                         'ss', 'cockpit.Test', 'Answer')
+            _reply, = await self.client.call_method_async(None, '/test', 'org.freedesktop.DBus.Properties', 'Get',
+                                                          'ss', 'cockpit.Test', 'Answer')
 
             signals = self.signals_queue()
             self.test_object.everything_changed(11, 'noise')
