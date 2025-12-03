@@ -16,27 +16,28 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import xml.etree.ElementTree as ET
+from typing import Any
 
 
-def parse_method(method):
+def parse_method(method: ET.Element) -> 'dict[str, list[str]]':
     return {
         "in": [tag.attrib['type'] for tag in method.findall("arg") if tag.get('direction', 'in') == 'in'],
         "out": [tag.attrib['type'] for tag in method.findall("arg[@direction='out']")]
     }
 
 
-def parse_property(prop):
+def parse_property(prop: ET.Element) -> 'dict[str, str]':
     return {
         "flags": 'w' if prop.attrib.get('access') == 'write' else 'r',
         "type": prop.attrib['type']
     }
 
 
-def parse_signal(signal):
+def parse_signal(signal: ET.Element) -> 'dict[str, list[str]]':
     return {"in": [tag.attrib['type'] for tag in signal.findall("arg")]}
 
 
-def parse_interface(interface):
+def parse_interface(interface: ET.Element) -> 'dict[str, dict[str, Any]]':
     return {
         "methods": {tag.attrib['name']: parse_method(tag) for tag in interface.findall('method')},
         "properties": {tag.attrib['name']: parse_property(tag) for tag in interface.findall('property')},
@@ -44,13 +45,13 @@ def parse_interface(interface):
     }
 
 
-def parse_xml(xml):
+def parse_xml(xml: str):
     et = ET.fromstring(xml)
     return {tag.attrib['name']: parse_interface(tag) for tag in et.findall('interface')}
 
 
 # Pretend like this is a little bit functional
-def element(tag, children=(), **kwargs):
+def element(tag, children=(), **kwargs) -> ET.Element:
     tag = ET.Element(tag, kwargs)
     tag.extend(children)
     return tag
