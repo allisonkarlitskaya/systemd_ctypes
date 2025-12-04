@@ -42,6 +42,7 @@ from enum import Enum
 from typing import Any, Callable, ClassVar, Dict, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union
 
 from . import libsystemd, typing
+from .handle import Handle
 from .typing import Annotated, TypeGuard
 
 _object_path_re = re.compile(r'/|(/[A-Za-z0-9_]+)+')

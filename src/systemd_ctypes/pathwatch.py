@@ -19,9 +19,10 @@ import errno
 import logging
 import os
 import stat
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from .event import Event
+from .handle import Handle
 from .inotify import Event as IN
 
 logger = logging.getLogger(__name__)
@@ -62,56 +63,6 @@ logger = logging.getLogger(__name__)
 # event happened on this (directory) fd which impacted the name file".  We
 # build a series of these when setting up a watch in order to find out if any
 # part of the path leading to the monitored file changed.
-
-
-class Handle(int):
-    """An integer subclass that makes it easier to work with file descriptors"""
-
-    def __new__(cls, fd: int = -1) -> 'Handle':
-        return super(Handle, cls).__new__(cls, fd)
-
-    # separate __init__() to set _needs_close mostly to keep pylint quiet
-    def __init__(self, fd: int = -1):
-        super().__init__()
-        self._needs_close = fd != -1
-
-    def __bool__(self) -> bool:
-        return self != -1
-
-    def close(self) -> None:
-        if self._needs_close:
-            self._needs_close = False
-            os.close(self)
-
-    def __eq__(self, value: object) -> bool:
-        if int.__eq__(self, value):  # also handles both == -1
-            return True
-
-        if not isinstance(value, int):  # other object is not an int
-            return False
-
-        if not self or not value:  # when only one == -1
-            return False
-
-        return os.path.sameopenfile(self, value)
-
-    def __del__(self) -> None:
-        if self._needs_close:
-            self.close()
-
-    def __enter__(self) -> 'Handle':
-        return self
-
-    def __exit__(self, *_args: object) -> None:
-        self.close()
-
-    @classmethod
-    def open(cls, *args: Any, **kwargs: Any) -> 'Handle':
-        return cls(os.open(*args, **kwargs))
-
-    def steal(self) -> 'Handle':
-        self._needs_close = False
-        return self.__class__(int(self))
 
 
 class WatchInvalidator:
