@@ -213,6 +213,9 @@ class sd_bus_message(ReferenceType):
     def get_signature(self: 'sd_bus_message', complete: bool) -> str:
         raise NotImplementedError
 
+    def set_allow_interactive_authorization(self: 'sd_bus_message', allowed: int) -> Union[None, Errno]:
+        ...
+
 
 class sd_bus(ReferenceType):
     def _add_match(
@@ -301,6 +304,9 @@ class sd_bus(ReferenceType):
         ...
 
     def set_address(self: 'sd_bus', address: str) -> Union[None, Errno]:
+        ...
+
+    def set_allow_interactive_authorization(self: 'sd_bus', allowed: int) -> Union[None, Errno]:
         ...
 
     def set_bus_client(self: 'sd_bus', b: bool) -> Union[None, Errno]:
