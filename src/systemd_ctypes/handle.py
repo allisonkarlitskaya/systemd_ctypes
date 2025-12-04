@@ -67,3 +67,6 @@ class Handle(int):
     def steal(self) -> 'Handle':
         self._needs_close = False
         return self.__class__(int(self))
+
+    def fileno(self) -> int:
+        return int(self)
