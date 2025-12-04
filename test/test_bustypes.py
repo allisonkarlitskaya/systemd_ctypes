@@ -69,7 +69,7 @@ def test_valid_signature(signature):
 
 
 @pytest.mark.parametrize('signature', [
-    *'acefhjklmprwz', 'a{vs}', '{ss}', '(ss', 'a{sss}', '()', '((s)', 'a[sv]', 'a<sv>'
+    *'acefjklmprwz', 'a{vs}', '{ss}', '(ss', 'a{sss}', '()', '((s)', 'a[sv]', 'a<sv>'
 ])
 def test_invalid_signature(signature):
     assert not bustypes.is_signature(signature)
@@ -255,3 +255,130 @@ def test_singleton_types() -> None:
     tuple_str_list, = bustypes.from_signature('(asas)')
     assert isinstance(tuple_str_list, bustypes.ContainerType)
     assert all(str_list is item for item in tuple_str_list.item_types)
+
+
+def test_handle_rejects_raw_int(message: BusMessage) -> None:
+    """Ensure that raw integers cannot be sent as file descriptors."""
+    import os
+
+    from systemd_ctypes import Handle
+
+    writer = bustypes.from_annotation(BusType.handle).writer
+
+    # Raw int should be rejected
+    with pytest.raises(TypeError, match=r"'h' type requires file object, not 'int'"):
+        writer(message, 0)
+
+    with pytest.raises(TypeError, match=r"'h' type requires file object, not 'int'"):
+        writer(message, 1)
+
+    # Handle instance should work
+    r, w = os.pipe()
+    try:
+        handle = Handle(r)
+        writer(message, handle)
+    finally:
+        os.close(w)
+        handle.close()
+
+
+def test_handle_roundtrip(message: BusMessage) -> None:
+    """Test that Handle values can be sent and received correctly."""
+    import os
+
+    from systemd_ctypes import Handle
+
+    r, w = os.pipe()
+    try:
+        handle = Handle(r)
+        handle_type = bustypes.from_annotation(BusType.handle)
+        handle_type.writer(message, handle)
+        message.seal(0, 0)
+        result = handle_type.reader(message)
+        assert isinstance(result, Handle)
+        # The fd number may differ after passing through D-Bus
+        # but it should point to the same file
+        assert result
+    finally:
+        os.close(w)
+        handle.close()
+
+
+def test_handle_close_on_drop() -> None:
+    """Test that Handle properly closes fd when dropped."""
+    import os
+
+    from systemd_ctypes import Handle
+
+    r, w = os.pipe()
+    os.close(w)
+
+    handle = Handle(r)
+    fd_value = int(handle)
+
+    # fd should be valid
+    os.fstat(fd_value)
+
+    # Drop the handle
+    del handle
+
+    # fd should now be closed
+    with pytest.raises(OSError, match="Bad file descriptor"):
+        os.fstat(fd_value)
+
+
+def test_handle_socketpair_over_dbus() -> None:
+    """Test passing a socket fd over D-Bus and exchanging data."""
+    import socket
+
+    from systemd_ctypes import Handle, bus, run_async
+
+    # Create the D-Bus connection using a socketpair
+    client_sock, server_sock = socket.socketpair()
+    client = bus.Bus.new(fd=client_sock.detach())
+    server = bus.Bus.new(fd=server_sock.detach(), server=True)
+
+    # Create another socketpair for data transfer
+    data_a, data_b = socket.socketpair()
+
+    received_handle = None
+
+    class test_FdReceiver(bus.Object):
+        @bus.Interface.Method('h', 'h')
+        def echo_fd(self, fd: Handle) -> Handle:
+            nonlocal received_handle
+            received_handle = fd
+            return fd
+
+    receiver = test_FdReceiver()
+    slot = server.add_object('/test', receiver)
+
+    async def test():
+        # Send data_b's fd over D-Bus
+        result, = await client.call_method_async(
+            None, '/test', 'test.FdReceiver', 'EchoFd', 'h', data_b
+        )
+
+        # The result should be a Handle
+        assert isinstance(result, Handle)
+
+        # Wrap the received Handle in a socket for send/recv
+        received_sock = socket.fromfd(received_handle, socket.AF_UNIX, socket.SOCK_STREAM)
+
+        # Now test bidirectional communication:
+        # Write on data_a, read from the received socket
+        data_a.send(b'hello from a')
+        assert received_sock.recv(64) == b'hello from a'
+
+        # Write on received socket, read from data_a
+        received_sock.send(b'hello from b')
+        assert data_a.recv(64) == b'hello from b'
+
+        received_sock.close()
+
+    try:
+        run_async(test())
+    finally:
+        data_a.close()
+        data_b.close()
+        del slot
