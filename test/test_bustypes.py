@@ -69,7 +69,7 @@ def test_valid_signature(signature):
 
 
 @pytest.mark.parametrize('signature', [
-    *'acefhjklmprwz', 'a{vs}', '{ss}', '(ss', 'a{sss}', '()', '((s)', 'a[sv]', 'a<sv>'
+    *'acefjklmprwz', 'a{vs}', '{ss}', '(ss', 'a{sss}', '()', '((s)', 'a[sv]', 'a<sv>'
 ])
 def test_invalid_signature(signature):
     assert not bustypes.is_signature(signature)
@@ -255,3 +255,73 @@ def test_singleton_types() -> None:
     tuple_str_list, = bustypes.from_signature('(asas)')
     assert isinstance(tuple_str_list, bustypes.ContainerType)
     assert all(str_list is item for item in tuple_str_list.item_types)
+
+
+def test_handle_rejects_raw_int(message: BusMessage) -> None:
+    """Ensure that raw integers cannot be sent as file descriptors."""
+    import os
+
+    from systemd_ctypes import Handle
+
+    writer = bustypes.from_annotation(BusType.handle).writer
+
+    # Raw int should be rejected
+    with pytest.raises(TypeError, match=r"'h' type requires Handle instance, not 'int'"):
+        writer(message, 0)
+
+    with pytest.raises(TypeError, match=r"'h' type requires Handle instance, not 'int'"):
+        writer(message, 1)
+
+    # Handle instance should work
+    r, w = os.pipe()
+    try:
+        handle = Handle(r)
+        writer(message, handle)
+    finally:
+        os.close(w)
+        handle.close()
+
+
+def test_handle_roundtrip(message: BusMessage) -> None:
+    """Test that Handle values can be sent and received correctly."""
+    import os
+
+    from systemd_ctypes import Handle
+
+    r, w = os.pipe()
+    try:
+        handle = Handle(r)
+        handle_type = bustypes.from_annotation(BusType.handle)
+        handle_type.writer(message, handle)
+        message.seal(0, 0)
+        result = handle_type.reader(message)
+        assert isinstance(result, Handle)
+        # The fd number may differ after passing through D-Bus
+        # but it should point to the same file
+        assert result
+    finally:
+        os.close(w)
+        handle.close()
+
+
+def test_handle_close_on_drop() -> None:
+    """Test that Handle properly closes fd when dropped."""
+    import os
+
+    from systemd_ctypes import Handle
+
+    r, w = os.pipe()
+    os.close(w)
+
+    handle = Handle(r)
+    fd_value = int(handle)
+
+    # fd should be valid
+    os.fstat(fd_value)
+
+    # Drop the handle
+    del handle
+
+    # fd should now be closed
+    with pytest.raises(OSError, match="Bad file descriptor"):
+        os.fstat(fd_value)
