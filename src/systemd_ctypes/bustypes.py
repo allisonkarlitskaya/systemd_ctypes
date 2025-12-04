@@ -37,6 +37,7 @@ import ctypes
 import functools
 import inspect
 import json
+import os
 import re
 from enum import Enum
 from typing import Any, Callable, ClassVar, Dict, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union
@@ -102,7 +103,7 @@ def yield_base_helpers() -> Iterable[Tuple[str, object]]:
         yield f'{name}_ref', ctypes.byref(instance)
         yield f'{name}_setter', instance.__class__.value.__set__
 
-    for char in 'aervy':
+    for char in 'aehrvy':
         yield char, ctypes.c_char(ord(char))
 
     # https://docs.python.org/3/c-api/unicode.html#c.PyUnicode_FromString
@@ -182,6 +183,37 @@ class FixedType(BasicType):
                 raise TypeError(f"Cannot represent value {value} with type '{self.typestring}'")
             append_basic(message, type_constant, reference)
         return fixed_writer
+
+
+class HandleType(Type):
+    __slots__ = ()
+
+    # We're a bit more relaxed about performance here: sending fds is a heavy
+    # lift and not something that happens often, so we simplify the
+    # implementation.
+
+    def get_writer(self, append_basic, h):
+        def handle_writer(message: libsystemd.sd_bus_message, value: object) -> None:
+            # We need this to be specifically `Handle` and not just any int:
+            # otherwise receiving a JSON document from elsewhere and sending it
+            # verbatim (as Cockpit bridge does) could result local fds being
+            # used, which is definitely unintended.  Forcing the creation of a
+            # Handle instance avoids that.
+            try:
+                fd = int(value.fileno())  # type: ignore[attr-defined]
+            except (AttributeError, TypeError, ValueError) as exc:
+                raise TypeError(f"'h' type requires file object, not '{value.__class__.__name__}'") from exc
+            append_basic(message, h, ctypes.byref(ctypes.c_int(fd)))
+        return handle_writer
+
+    def get_reader(self, read_basic, h):
+        def handle_reader(message: libsystemd.sd_bus_message) -> Handle:
+            variable = ctypes.c_int()
+            if read_basic(message, h, ctypes.byref(variable)) <= 0:
+                raise StopIteration
+            # The fd is owned by the message; dup it so Handle can own its copy
+            return Handle(os.dup(variable.value))
+        return handle_reader
 
 
 class StringLikeType(BasicType):
@@ -433,6 +465,7 @@ class BusType(Enum):
     signature = Annotated[str, StringLikeType('g', is_signature)]
     bytestring = Annotated[bytes, BytestringType('ay')]
     variant = Annotated[dict, VariantType('v')]
+    handle = Annotated[Handle, HandleType('h')]
 
 
 # mypy gets confused by enums, so just use Any
