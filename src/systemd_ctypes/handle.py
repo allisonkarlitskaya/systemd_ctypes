@@ -61,9 +61,18 @@ class Handle(int):
         self.close()
 
     @classmethod
+    def borrow(cls, fd: int) -> 'Handle':
+        self = cls.__new__(cls, fd)
+        self._needs_close = False
+        return self
+
+    @classmethod
     def open(cls, *args: Any, **kwargs: Any) -> 'Handle':
         return cls(os.open(*args, **kwargs))
 
     def steal(self) -> 'Handle':
         self._needs_close = False
         return self.__class__(int(self))
+
+    def fileno(self) -> int:
+        return int(self)
