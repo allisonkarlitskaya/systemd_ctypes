@@ -16,6 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import asyncio
+import ctypes
 import enum
 import logging
 import typing
@@ -217,6 +218,11 @@ class BusMessage(libsystemd.sd_bus_message):
             out_type.write(reply, *return_value)
         return reply.send()
 
+    def get_type(self) -> int:
+        t = ctypes.c_uint8()
+        self._get_type(byref(t))
+        return t.value
+
 
 class Slot(libsystemd.sd_bus_slot):
     def __init__(self, callback: Callable[[BusMessage], bool]):
@@ -381,6 +387,11 @@ class Bus(libsystemd.sd_bus):
     def add_match(self, rule: str, handler: Callable[[BusMessage], bool]) -> Slot:
         slot = Slot(handler)
         self._add_match(byref(slot), rule, slot.trampoline, slot.userdata)
+        return slot
+
+    def add_filter(self, handler: Callable[[BusMessage], bool]) -> Slot:
+        slot = Slot(handler)
+        self._add_filter(byref(slot), slot.trampoline, slot.userdata)
         return slot
 
     def add_object(self, path: str, obj: 'BaseObject') -> Slot:
