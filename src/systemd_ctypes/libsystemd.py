@@ -195,6 +195,9 @@ class sd_bus_message(ReferenceType):
     def _get_bus(self: 'sd_bus_message') -> WeakReference:
         raise NotImplementedError
 
+    def _get_type(self: 'sd_bus_message', t: Reference[ctypes.c_uint8]) -> Union[None, Errno]:
+        raise NotImplementedError
+
     def get_destination(self: 'sd_bus_message') -> str:
         raise NotImplementedError
 
@@ -219,6 +222,14 @@ class sd_bus(ReferenceType):
         self: 'sd_bus',
         slot: Reference[sd_bus_slot],
         match: str,
+        handler: Callback,
+        user_data: UserData,
+    ) -> Union[None, Errno]:
+        ...
+
+    def _add_filter(
+        self: 'sd_bus',
+        slot: Reference[sd_bus_slot],
         handler: Callback,
         user_data: UserData,
     ) -> Union[None, Errno]:
