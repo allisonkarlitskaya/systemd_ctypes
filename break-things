@@ -1,0 +1,5 @@
+#!/bin/sh
+
+while true; do
+    time PYTHONPATH=src python3 examples/dbus-run0.py --debug sh -- -c "exit 1" >> log
+done
