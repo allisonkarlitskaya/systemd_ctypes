@@ -22,7 +22,8 @@ __version__ = "0"
 from .bus import Bus, BusError, BusMessage
 from .bustypes import BusType, JSONEncoder, Variant
 from .event import Event, EventLoopPolicy, run_async
-from .pathwatch import Handle, PathWatch
+from .handle import Handle
+from .pathwatch import PathWatch
 
 __all__ = [
     "Bus",
