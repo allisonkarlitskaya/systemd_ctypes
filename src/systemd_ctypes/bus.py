@@ -26,6 +26,9 @@ from .librarywrapper import WeakReference, byref
 
 logger = logging.getLogger(__name__)
 
+# Set of active async tasks to prevent garbage collection before completion
+_active_tasks: 'set[asyncio.Task]' = set()
+
 
 class BusError(Exception):
     """An exception corresponding to a D-Bus error message
@@ -200,7 +203,15 @@ class BusMessage(libsystemd.sd_bus_message):
         """
         if asyncio.coroutines.iscoroutine(return_value):
             task = asyncio.create_task(return_value)
-            task.add_done_callback(lambda task: self._coroutine_task_complete(out_type, task))
+
+            # Keep task alive to prevent garbage collection
+            _active_tasks.add(task)
+
+            def done_callback(task: asyncio.Task) -> None:
+                _active_tasks.discard(task)
+                self._coroutine_task_complete(out_type, task)
+
+            task.add_done_callback(done_callback)
             return True
 
         reply = self.new_method_return()
