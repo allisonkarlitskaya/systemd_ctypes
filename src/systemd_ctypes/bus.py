@@ -200,7 +200,19 @@ class BusMessage(libsystemd.sd_bus_message):
         """
         if asyncio.coroutines.iscoroutine(return_value):
             task = asyncio.create_task(return_value)
-            task.add_done_callback(lambda task: self._coroutine_task_complete(out_type, task))
+
+            # Keep task alive on the bus to prevent garbage collection
+            bus = self.get_bus()
+            # ugly, but we can't just declare that on Bus class, the actual ctypes object does not call __init__
+            if not hasattr(bus, '_active_tasks'):
+                bus._active_tasks = set()
+            bus._active_tasks.add(task)
+
+            def done_callback(task: asyncio.Task) -> None:
+                bus._active_tasks.discard(task)
+                self._coroutine_task_complete(out_type, task)
+
+            task.add_done_callback(done_callback)
             return True
 
         reply = self.new_method_return()
