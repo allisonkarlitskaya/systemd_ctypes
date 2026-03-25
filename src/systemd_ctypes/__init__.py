@@ -21,7 +21,7 @@ __version__ = "0"
 
 from .bus import Bus, BusError, BusMessage
 from .bustypes import BusType, JSONEncoder, Variant
-from .event import Event, EventLoopPolicy, run_async
+from .event import Event, run_async
 from .handle import Handle
 from .pathwatch import PathWatch
 
@@ -31,7 +31,6 @@ __all__ = [
     "BusMessage",
     "BusType",
     "Event",
-    "EventLoopPolicy",
     "Handle",
     "JSONEncoder",
     "PathWatch",

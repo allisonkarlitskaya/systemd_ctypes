@@ -18,10 +18,12 @@
 import asyncio
 import selectors
 import sys
-from typing import Callable, ClassVar, Coroutine, List, Optional, Tuple
+from typing import Callable, ClassVar, Coroutine, List, Optional, Tuple, TypeVar
 
 from . import inotify, libsystemd
 from .librarywrapper import Reference, UserData, byref
+
+T = TypeVar('T')
 
 
 class Event(libsystemd.sd_event):
@@ -106,46 +108,45 @@ def selector_event_loop_factory() -> asyncio.AbstractEventLoop:
     return asyncio.SelectorEventLoop(Selector())
 
 
-# deprecated in Python 3.12
-class EventLoopPolicy(asyncio.DefaultEventLoopPolicy):
-    def new_event_loop(self) -> asyncio.AbstractEventLoop:
-        return selector_event_loop_factory()
+def run_async(main: Coroutine[None, None, T], debug: Optional[bool] = None) -> T:
+    if sys.version_info >= (3, 12):
+        # Python 3.12+: asyncio.run() supports loop_factory
+        return asyncio.run(main, debug=debug, loop_factory=selector_event_loop_factory)
 
-
-def run_async(main: Coroutine[None, None, None], debug: Optional[bool] = None) -> None:
-    polyfill = sys.version_info < (3, 7, 0) and not hasattr(asyncio, 'run')
-    loop_factory = sys.version_info >= (3, 12, 0)
-
-    if not loop_factory:
+    elif sys.version_info >= (3, 7):
+        # Python 3.7-3.11: inject via EventLoopPolicy
+        class EventLoopPolicy(asyncio.DefaultEventLoopPolicy):
+            def new_event_loop(self) -> asyncio.AbstractEventLoop:
+                return selector_event_loop_factory()
         asyncio.set_event_loop_policy(EventLoopPolicy())
+        return asyncio.run(main, debug=debug)
 
-    if polyfill:
-        # Polyfills for Python 3.6:
-        loop = asyncio.get_event_loop()
+    else:
+        # Python 3.6: no asyncio.run(), polyfill get_running_loop and create_task
+        loop = selector_event_loop_factory()
+        asyncio.set_event_loop(loop)
 
         assert not hasattr(asyncio, 'get_running_loop')
-        asyncio.get_running_loop = lambda: loop
+        asyncio.get_running_loop = lambda: loop  # type: ignore[attr-defined]
 
         assert not hasattr(asyncio, 'create_task')
-        asyncio.create_task = loop.create_task
+        asyncio.create_task = loop.create_task  # type: ignore[attr-defined]
 
-        assert not hasattr(asyncio, 'run')
-
-        def run(
-                main: Coroutine[None, None, None], debug: Optional[bool] = None
-        ) -> None:
+        try:
             if debug is not None:
                 loop.set_debug(debug)
-            loop.run_until_complete(main)
-
-        asyncio.run = run  # type: ignore[assignment]
-
-        asyncio._systemd_ctypes_polyfills = True  # type: ignore[attr-defined]
-
-    if loop_factory:
-        asyncio.run(main, debug=debug, loop_factory=selector_event_loop_factory)
-    else:
-        asyncio.run(main, debug=debug)
-
-    if polyfill:
-        del asyncio.create_task, asyncio.get_running_loop, asyncio.run
+            return loop.run_until_complete(main)
+        finally:
+            try:
+                # Cancel all pending tasks
+                pending = asyncio.Task.all_tasks(loop)  # type: ignore[attr-defined]
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                loop.run_until_complete(loop.shutdown_asyncgens())
+                # shutdown_default_executor() not available until 3.9
+            finally:
+                asyncio.set_event_loop(None)
+                loop.close()
+                del asyncio.create_task, asyncio.get_running_loop

@@ -17,7 +17,7 @@
 
 import asyncio
 
-from systemd_ctypes import Bus, EventLoopPolicy, introspection
+from systemd_ctypes import Bus, introspection, run_async
 
 
 def property_changed(message):
@@ -46,5 +46,4 @@ async def main():
     del slot
 
 
-asyncio.set_event_loop_policy(EventLoopPolicy())
-asyncio.run(main())
+run_async(main())

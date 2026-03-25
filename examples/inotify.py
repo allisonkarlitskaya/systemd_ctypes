@@ -3,7 +3,7 @@ import asyncio
 import logging
 import os
 
-from systemd_ctypes import EventLoopPolicy, PathWatch
+from systemd_ctypes import PathWatch, run_async
 
 
 class Listener:
@@ -26,5 +26,4 @@ async def main():
     watch.close()
 
 logging.basicConfig(level=logging.DEBUG)
-asyncio.set_event_loop_policy(EventLoopPolicy())
-asyncio.run(main())
+run_async(main())

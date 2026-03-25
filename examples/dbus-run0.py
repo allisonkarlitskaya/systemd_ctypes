@@ -25,7 +25,7 @@ import sys
 import uuid
 from collections.abc import Mapping, Sequence
 
-from systemd_ctypes import Bus, BusError, BusMessage, EventLoopPolicy, Variant
+from systemd_ctypes import Bus, BusError, BusMessage, Variant, run_async
 
 logger = logging.getLogger("run0")
 
@@ -140,8 +140,6 @@ async def run0(bus: Bus, cmd: str, args: Sequence[str]) -> Mapping[str, object]:
 
 
 def main() -> str | int | None:
-    asyncio.set_event_loop_policy(EventLoopPolicy())
-
     parser = argparse.ArgumentParser(description="Run a command as root via systemd")
     parser.add_argument("--debug", action="store_true", help="Enable debugging")
     parser.add_argument("cmd", help="Command to run")
@@ -161,7 +159,7 @@ def main() -> str | int | None:
     system = Bus.default_system()
     system.set_allow_interactive_authorization(True)
     try:
-        properties = asyncio.run(run0(system, pathname, args.args), debug=args.debug)
+        properties = run_async(run0(system, pathname, args.args), debug=args.debug)
     except BusError as exc:
         logger.error("Error: [%s] %s", exc.name, exc.message)
         return 255
