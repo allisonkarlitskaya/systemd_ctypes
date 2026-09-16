@@ -302,19 +302,21 @@ class Bus(libsystemd.sd_bus):
     @staticmethod
     def default_system(attach_event: bool = True) -> 'Bus':
         if Bus._default_system_instance is None:
-            Bus._default_system_instance = Bus()
-            Bus._default_system(byref(Bus._default_system_instance))
+            bus = Bus()
+            Bus._default_system(byref(bus))
             if attach_event:
-                Bus._default_system_instance.attach_event(None, 0)
+                bus.attach_event(None, 0)
+            Bus._default_system_instance = bus
         return Bus._default_system_instance
 
     @staticmethod
     def default_user(attach_event: bool = True) -> 'Bus':
         if Bus._default_user_instance is None:
-            Bus._default_user_instance = Bus()
-            Bus._default_user(byref(Bus._default_user_instance))
+            bus = Bus()
+            Bus._default_user(byref(bus))
             if attach_event:
-                Bus._default_user_instance.attach_event(None, 0)
+                bus.attach_event(None, 0)
+            Bus._default_user_instance = bus
         return Bus._default_user_instance
 
     def message_new_method_call(
