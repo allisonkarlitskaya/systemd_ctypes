@@ -91,7 +91,7 @@ jobs:
       - name: Run unit tests
         uses: uraimo/run-on-arch-action@v2
         with:
-          distro: ubuntu_latest
+          distro: bookworm
           arch: ${{ matrix.arch }}
           install: |
             apt-get update
