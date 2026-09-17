@@ -15,6 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# ruff: noqa: RUF036
+# None-first Union ordering is intentional: None is the success case, Errno is the exceptional one
+
 import ctypes
 import os
 import sys
